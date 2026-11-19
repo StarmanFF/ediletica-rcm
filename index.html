@@ -503,6 +503,43 @@ body.auth-on #authRoot{display:block}
 .auth-loading{display:flex;flex-direction:column;align-items:center;gap:14px;padding:30px 0;color:var(--muted)}
 @media(max-width:800px){.auth-wrap{grid-template-columns:1fr;grid-template-rows:auto 1fr}.auth-side{padding:28px}.auth-logo{width:160px}.auth-tag{font-size:19px}}
 
+/* ---------- Punti dentro gli elementi e argomenti generali (4.1) ---------- */
+.el-card .pts{display:flex;flex-direction:column;gap:4px;margin-top:-2px}
+.el-card .pt{display:flex;align-items:flex-start;gap:7px;font-size:12px;line-height:1.35;color:var(--ink-2)}
+.el-card .pt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.el-card .pt i,.ptrow .dot i{display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;margin-top:4px;background:#d08a10;box-shadow:0 0 0 2px #fdf2dc}
+.pt.pt-b i,.ptrow .dot.pt-b i{background:#cf3a2f;box-shadow:0 0 0 2px #fde7e4}
+.pt.pt-d i,.ptrow .dot.pt-d i{background:#1d8657;box-shadow:0 0 0 2px #e2f3ea}
+.el-card .pt.pt-b span{color:var(--blk);font-weight:650}
+.el-card .pt.more{color:var(--muted);font-size:11.5px;padding-left:15px}
+.ptlist{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.ptrow{display:grid;grid-template-columns:14px 78px minmax(0,1fr) auto;gap:10px;align-items:start;width:100%;padding:10px 14px;background:none;border:0;border-bottom:1px solid var(--line-2);text-align:left;cursor:pointer;font:inherit;color:inherit}
+.ptrow:last-child{border-bottom:0}
+.ptrow:hover{background:#faf9f6}
+.ptrow.is-block{box-shadow:inset 3px 0 0 var(--blk)}
+.ptrow .dot{padding-top:2px}
+.ptrow .code{font-family:var(--mono);font-size:11.5px;font-weight:650;color:var(--accent);padding-top:2px}
+.ptrow .tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ptrow .tx b{font-weight:650;font-size:13.5px}
+.ptrow .dec{display:flex;gap:5px;align-items:flex-start;font-size:12px;color:#1d6b47}
+.ptrow .dec .svg{width:13px;height:13px;flex:none;margin-top:2px}
+.ptrow .meta{font-size:11.5px;color:var(--muted)}
+.ptrow .right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.qadd{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;padding:10px;border:1px dashed #cfc8bb;border-radius:12px;background:#fbfaf7}
+.qadd .qa-title{flex:1 1 280px;min-width:0}
+.qadd .qa-work{flex:1 1 220px;min-width:0}
+.qadd input[type=text],.qadd input:not([type]){height:36px;border:1px solid var(--line);border-radius:9px;padding:0 11px;font:inherit;font-size:13.5px;background:#fff}
+.qadd input.bad{border-color:var(--blk);box-shadow:0 0 0 3px rgba(207,58,47,.12)}
+.qadd .qa-blk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--muted);padding:0 10px;height:36px;border-radius:9px;border:1px solid var(--line);background:#fff;cursor:pointer;user-select:none}
+.qadd .qa-blk.on{color:var(--blk);border-color:#f0b9b2;background:#fde7e4}
+.gen-card{padding:16px 18px}
+.gen-card .gen-help{font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.5}
+.gen-card .reg-foot{margin:12px -18px -16px}
+.pt-closed{margin-top:10px;font-size:12.5px}
+.pt-closed summary{cursor:pointer;color:var(--muted);margin-bottom:8px}
+.matrix .cell.gen b{font-size:12px;font-weight:750}
+@media (max-width:720px){.ptrow{grid-template-columns:14px minmax(0,1fr)}.ptrow .code{display:none}.ptrow .right{grid-column:2;flex-direction:row;align-items:center}}
+
 </style>
 </head>
 <body>
@@ -970,7 +1007,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    EDILETICA – Room Coordination Manager · v3.0
    Core: configurazione, catalogo elementi, utilità, persistenza, modello
    ===================================================================== */
-const APP_VERSION = '4.0';
+const APP_VERSION = '4.1';
 const SCHEMA = 3;
 
 const PROJECT = {
@@ -1061,7 +1098,7 @@ const ELEMENTS = [
 ];
 const EL = Object.fromEntries(ELEMENTS.map(e => [e.key, e]));
 const GROUPS = { arch: 'Architettura e finiture', imp: 'Impianti e tecnologie' };
-const GENERAL = { key: 'generale', name: 'Criticità e note generali', short: 'Generale', icon: 'alert' };
+const GENERAL = { key: 'generale', name: 'Argomenti generali', short: 'Generali', icon: 'alert' };
 const EL_STATUSES = ['Da definire', 'In definizione', 'Deciso', 'Non previsto'];
 const EL_STATUS_INFO = {
   'Da definire': 'Nessuna scelta ancora fatta: serve una decisione.',
@@ -1169,13 +1206,26 @@ function normalizeElement(x, key) {
 }
 function elOf(d, roomId, key) { return d.rooms[roomId].elements[key]; }
 function elIssues(roomId, key, onlyOpen = true) { return db.issues.filter(i => i.roomId === roomId && i.element === key && (!onlyOpen || isOpen(i))); }
+const isPending = i => i.status === 'Aperto' || i.status === 'In verifica';
+/* Stato dell'elemento: la scheda + le sue questioni (più punti distinti nello stesso elemento).
+   Una questione bloccante blocca l'elemento; una questione ancora aperta lo tiene «in definizione». */
 function elState(roomId, key) {
   const e = elOf(db, roomId, key);
   if (e.status === 'Non previsto') return 'na';
-  if (e.blocking || elIssues(roomId, key).some(isBlocking)) return 'block';
-  if (e.status === 'Deciso') return 'decided';
-  if (e.status === 'In definizione') return 'progress';
+  const qs = elIssues(roomId, key);
+  if (e.blocking || qs.some(isBlocking)) return 'block';
+  const pending = qs.some(isPending);
+  if (e.status === 'Deciso') return pending ? 'progress' : 'decided';
+  if (e.status === 'In definizione' || pending) return 'progress';
   return 'todo';
+}
+/* Argomenti generali dell'ambiente (questioni non legate a un elemento) */
+function genState(roomId) {
+  const qs = elIssues(roomId, 'generale');
+  if (!qs.length) return 'none';
+  if (qs.some(isBlocking)) return 'block';
+  if (qs.some(isPending)) return 'progress';
+  return 'decided';
 }
 const elIsOpen = e => e.status === 'Da definire' || e.status === 'In definizione';
 const elOverdue = e => !!e.dueDate && elIsOpen(e) && e.dueDate < todayISO();
@@ -1668,6 +1718,37 @@ function miniRing(p) {
 }
 function statusChip(s) { return `<span class="st st-${s.replace(/\s/g, '-')}">${esc(s)}</span>`; }
 function blockFlag() { return `<span class="flag-block">${ic('alert')}BLOCCANTE</span>`; }
+/* Punti (questioni) dentro un elemento o tra gli argomenti generali */
+const ptDot = i => isBlocking(i) ? 'b' : isPending(i) ? 'o' : 'd';
+function pointsMini(roomId, key, max = 3) {
+  const list = sortIssues(elIssues(roomId, key)); if (!list.length) return '';
+  return `<div class="pts">${list.slice(0, max).map(i => `<div class="pt pt-${ptDot(i)}"><i></i><span>${esc(i.title)}</span></div>`).join('')}${list.length > max ? `<div class="pt more">+ ${list.length - max} altri punti</div>` : ''}</div>`;
+}
+function quickAdd(roomId, element) {
+  const ph = element === 'generale' ? 'Nuovo argomento, es. «Accesso mezzi dal cortile»' : 'Nuovo punto, es. «Parete nord: finitura» o «Quadro elettrico: posizione»';
+  return `<div class="qadd staff-only" data-room="${roomId}" data-el="${element}">
+    <input class="qa-title" maxlength="140" placeholder="${esc(ph)}" aria-label="Titolo del nuovo punto">
+    <label class="qa-blk"><input type="checkbox" class="qa-b">Bloccante</label>
+    <input class="qa-work hidden" maxlength="140" placeholder="Quale lavorazione blocca?" aria-label="Lavorazione bloccata">
+    <button type="button" class="btn btn-sm btn-primary" data-action="quick-issue">${ic('plus')}Aggiungi</button></div>`;
+}
+function pointRows(list, attr = 'data-action="open-issue"') {
+  return list.map(i => `<button type="button" class="ptrow ${isBlocking(i) ? 'is-block' : ''}" ${attr} data-id="${esc(i.id)}" data-hl="${esc(i.id)}">
+    <span class="dot pt-${ptDot(i)}"><i></i></span><span class="code">${esc(i.id)}</span>
+    <span class="tx"><b>${esc(i.title)}</b>${i.agreedDecision ? `<span class="dec">${ic('check')}${esc(i.agreedDecision)}</span>` : ''}<span class="meta">${esc(i.answerOwner || 'Da assegnare')}${i.dueDate ? ` · <span class="${isOverdue(i) ? 'overdue' : ''}">${fmtDate(i.dueDate)}</span>` : ''}${isBlocking(i) && i.affectedWork ? ` · blocca ${esc(i.affectedWork)}` : ''}</span></span>
+    <span class="right">${statusChip(i.status)}${isBlocking(i) ? blockFlag() : ''}</span></button>`).join('');
+}
+function genSection(roomId) {
+  const all = sortIssues(db.issues.filter(i => i.roomId === roomId && i.element === 'generale'));
+  const open = all.filter(isOpen), closed = all.length - open.length;
+  return `<div class="section-title"><h2>Argomenti generali</h2><span class="line"></span><span class="muted">${open.length ? plural(open.length, 'aperto', 'aperti') : 'nessuno aperto'}${open.filter(isBlocking).length ? ' · ' + plural(open.filter(isBlocking).length, 'bloccante', 'bloccanti') : ''}</span></div>
+    <section class="card gen-card">
+      <div class="gen-help">Temi dell’ambiente che non ricadono in un elemento: accessi, vincoli di cantiere, permessi, interferenze, sequenze di lavoro… Ognuno ha stato, responsabile, scadenza e decisione propri.</div>
+      ${open.length ? `<div class="ptlist">${pointRows(open)}</div>` : ''}
+      ${quickAdd(roomId, 'generale')}
+      ${closed ? `<div class="reg-foot"><span>${plural(closed, 'argomento chiuso', 'argomenti chiusi')}</span><a href="#" data-action="room-closed" data-room="${roomId}">Vedi nel registro</a></div>` : ''}
+    </section>`;
+}
 function dueHtml(d, overdue, soon) {
   if (!d) return '<span class="dim">—</span>';
   if (overdue) return `<span class="overdue">${fmtDate(d)}</span><div class="overdue" style="font-size:11px">${ic('clock')} scaduta</div>`;
@@ -1772,15 +1853,17 @@ function viewDashboard() {
 }
 function matrixHTML(rooms) {
   const floors = FLOORS.filter(f => rooms.some(r => r.floorId === f.id));
-  const head = `<thead><tr><th class="mx-room"></th>${ELEMENTS.map(e => `<th><button class="mx-colhead" data-action="dec-element" data-el="${e.key}" title="${esc(e.name)}: confronta tutti gli ambienti"><span class="ico">${ic(e.icon)}</span>${esc(e.short)}</button></th>`).join('')}<th style="text-align:left;padding-left:12px;font-size:11px;color:var(--muted)">Avanzamento</th></tr></thead>`;
-  const body = floors.map(f => `<tr class="mx-floor"><td colspan="${ELEMENTS.length + 2}">${esc(f.name)}</td></tr>` + rooms.filter(r => r.floorId === f.id).map(r => {
+  const head = `<thead><tr><th class="mx-room"></th>${ELEMENTS.map(e => `<th><button class="mx-colhead" data-action="dec-element" data-el="${e.key}" title="${esc(e.name)}: confronta tutti gli ambienti"><span class="ico">${ic(e.icon)}</span>${esc(e.short)}</button></th>`).join('')}<th><button class="mx-colhead" data-action="gen-register" title="Argomenti generali di ogni ambiente"><span class="ico">${ic('alert')}</span>Generali</button></th><th style="text-align:left;padding-left:12px;font-size:11px;color:var(--muted)">Avanzamento</th></tr></thead>`;
+  const body = floors.map(f => `<tr class="mx-floor"><td colspan="${ELEMENTS.length + 3}">${esc(f.name)}</td></tr>` + rooms.filter(r => r.floorId === f.id).map(r => {
     const p = roomProgress(r.id);
     return `<tr><th class="mx-room"><button class="mx-roombtn" data-action="open-room" data-id="${r.id}"><span class="code">${r.id}</span><span class="nm">${esc(r.name)}</span></button></th>
       ${ELEMENTS.map((e, k) => { const s = p.states[k]; const el = db.rooms[r.id].elements[e.key]; const q = elIssues(r.id, e.key).length; const sum = elSummary(e.key, el.specs);
         return `<td><button class="cell s-${s}" data-action="open-element" data-room="${r.id}" data-el="${e.key}" title="${esc(r.name)} · ${esc(e.name)}\n${STATE[s].label}${sum ? '\n' + esc(sum) : ''}${q ? '\n' + q + ' questioni aperte' : ''}" aria-label="${esc(e.name)}: ${STATE[s].label}">${ic(STATE_ICON[s])}${q ? `<span class="q">${q}</span>` : ''}</button></td>`; }).join('')}
+      ${(() => { const gs = genState(r.id), gq = elIssues(r.id, 'generale').length, sc = gs === 'none' ? 'na' : gs; return `<td><button class="cell s-${sc} gen" data-action="open-general" data-room="${r.id}" title="${esc(r.name)} · Argomenti generali
+${gq ? plural(gq, 'argomento non chiuso', 'argomenti non chiusi') : 'Nessun argomento'}" aria-label="Argomenti generali: ${gq}">${gq ? `<b>${gq}</b>` : ic('minus')}</button></td>`; })()}
       <td><div class="mx-prog"><div class="bar"><span style="width:${p.pct}%"></span></div><b>${p.pct}%</b></div></td></tr>`;
   }).join('')).join('');
-  const foot = `<tfoot><tr><td></td>${ELEMENTS.map(e => { const st = rooms.map(r => elState(r.id, e.key)); const ap = st.filter(s => s !== 'na').length; return `<td>${pct(st.filter(s => s === 'decided').length, ap)}%</td>`; }).join('')}<td></td></tr></tfoot>`;
+  const foot = `<tfoot><tr><td></td>${ELEMENTS.map(e => { const st = rooms.map(r => elState(r.id, e.key)); const ap = st.filter(s => s !== 'na').length; return `<td>${pct(st.filter(s => s === 'decided').length, ap)}%</td>`; }).join('')}<td></td><td></td></tr></tfoot>`;
   return `<div class="matrix-wrap"><table class="matrix">${head}<tbody>${body}</tbody>${foot}</table></div>`;
 }
 function priorityItems() {
@@ -1849,13 +1932,13 @@ function viewRoom(id) {
   </section>
   <div class="room-layout">
     <div>
-      ${group('arch')}${group('imp')}
-      <div class="section-title"><h2>Questioni aperte</h2><span class="line"></span><button class="btn btn-sm staff-only" data-action="new-issue" data-room="${id}">${ic('plus')}Nuova</button></div>
+      ${genSection(id)}${group('arch')}${group('imp')}
+      <div class="section-title"><h2>Tutte le questioni aperte dell’ambiente</h2><span class="line"></span><button class="btn btn-sm staff-only" data-action="new-issue" data-room="${id}">${ic('plus')}Nuova</button></div>
       <section class="card">${iss.length ? iss.map(qRow).join('') : emptyState('check', 'Nessuna questione aperta', 'Le domande da porre a progettisti, DL o fornitori compaiono qui, collegate al relativo elemento.')}
         ${closedN ? `<div class="reg-foot"><span>${plural(closedN, 'questione chiusa', 'questioni chiuse')} in questo ambiente</span><a href="#" data-action="room-closed" data-room="${id}">Vedi nel registro</a></div>` : ''}</section>
     </div>
     <div class="stack" style="margin-top:28px">
-      <section class="card"><div class="card-head"><h3>${ic('alert')}Criticità e note generali</h3><span class="sub" id="notesState"></span></div>
+      <section class="card"><div class="card-head"><h3>${ic('edit')}Note dell’ambiente</h3><span class="sub" id="notesState"></span></div>
         <div class="card-body">${isStaff() ? `<textarea class="notes-area" id="roomNotes" data-room="${id}" placeholder="Vincoli dell’ambiente, criticità di cantiere, decisioni generali, priorità…">${esc(data.notes)}</textarea>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted" style="font-size:11.5px">Incluse nei report (anche condivisibili)</span><button class="btn btn-sm" data-action="save-notes" data-room="${id}">${ic('check')}Salva note</button></div>` : `<div style="white-space:pre-wrap;font-size:13.5px">${esc(data.notes) || '<span class="muted">Nessuna nota.</span>'}</div>`}
           ${crit.length ? `<div class="crit-list">${crit.map(c => `<button class="crit ${c.c}" ${c.a}>${ic(c.c ? 'clock' : 'alert')}<span>${esc(c.t)}</span></button>`).join('')}</div>` : ''}
@@ -1882,8 +1965,9 @@ function elCard(roomId, def) {
     <div class="top"><span class="el-ico">${ic(def.icon)}</span>${spill(s, s === 'block')}</div>
     <div class="nm">${esc(def.name)}</div>
     ${s === 'block' && el.blockingWork ? `<div class="blockline">${ic('alert')}<span>Blocca: ${esc(el.blockingWork)}</span></div>` : ''}
-    <div class="sum ${sum || el.decision ? '' : 'ph'}">${esc(sum || el.decision || ph)}</div>
-    <div class="foot">${el.owner ? `<span>${ic('user')}${esc(el.owner)}</span>` : ''}${el.dueDate ? `<span class="${elOverdue(el) ? 'overdue' : ''}">${ic('calendar')}${fmtDate(el.dueDate)}</span>` : ''}${el.documentReference ? `<span title="${esc(el.documentReference)}">${ic('clip')}doc.</span>` : ''}${q ? `<span style="color:var(--accent);font-weight:650">${ic('question')}${q} quest.</span>` : ''}${commentCount(roomId, def.key) ? `<span>${ic('comment')}${commentCount(roomId, def.key)}</span>` : ''}${!el.owner && !el.dueDate && !el.documentReference && !q ? '<span>Clicca per compilare</span>' : ''}</div>
+    <div class="sum ${sum || el.decision ? '' : 'ph'}">${esc(sum || el.decision || (q ? '' : ph))}</div>
+    ${pointsMini(roomId, def.key)}
+    <div class="foot">${el.owner ? `<span>${ic('user')}${esc(el.owner)}</span>` : ''}${el.dueDate ? `<span class="${elOverdue(el) ? 'overdue' : ''}">${ic('calendar')}${fmtDate(el.dueDate)}</span>` : ''}${el.documentReference ? `<span title="${esc(el.documentReference)}">${ic('clip')}doc.</span>` : ''}${q ? `<span style="color:var(--accent);font-weight:650">${ic('question')}${plural(q, 'punto', 'punti')}</span>` : ''}${commentCount(roomId, def.key) ? `<span>${ic('comment')}${commentCount(roomId, def.key)}</span>` : ''}${!el.owner && !el.dueDate && !el.documentReference && !q ? '<span>Clicca per compilare</span>' : ''}</div>
   </button>`;
 }
 function qRow(i) {
@@ -2127,6 +2211,9 @@ async function openElementEditor(roomId, key) {
     <button class="icon-btn glass close" data-e="close" aria-label="Chiudi">${ic('x')}</button></div></div>
   <form class="modal-body" id="elForm" novalidate autocomplete="off">
     <div class="form-error hidden" id="edError" role="alert"></div>
+    <div class="fsec pts-sec"><div class="fsec-title">Punti da decidere in questo elemento</div>
+      <div class="help" style="margin:-4px 0 10px;font-size:12px;color:var(--muted)">Quando nello stesso elemento ci sono scelte distinte (es. pareti con finiture diverse) o più punti bloccanti, aggiungi un punto per ciascuno: ognuno ha stato, responsabile, scadenza e decisione propri. L’elemento resta «in definizione» finché ci sono punti aperti.</div>
+      <div id="edIssues"></div></div>
     <div class="fsec"><div class="fsec-title">Stato della decisione</div>
       <div class="statuspick" role="radiogroup">${EL_STATUSES.map(s => { const st = STATE[EL_STATE_OF[s]]; return `<label style="--c:${st.color};--cb:${st.bg}"><input type="radio" name="e_status" value="${s}" ${e.status === s ? 'checked' : ''}><span>${s}</span></label>`; }).join('')}</div>
       <div class="help" id="edHelp" style="margin-top:6px;font-size:12px;color:var(--muted)">${esc(EL_STATUS_INFO[e.status])}</div>
@@ -2150,7 +2237,6 @@ async function openElementEditor(roomId, key) {
       <div class="field wide"><label for="e_int">Note interne</label><textarea id="e_int" rows="2" placeholder="Costi, margini, riserve, responsabilità, strategia">${esc(e.internalNotes)}</textarea></div>
     </div></div>
     <div class="fsec"><div class="fsec-title">Commenti e risposte</div><div id="edComments"></div></div>
-    <div class="fsec"><div class="fsec-title">Questioni su questo elemento</div><div id="edIssues"></div></div>
     <div class="fsec"><div class="fsec-title">Storico dell’elemento</div><div id="edLog"></div></div>
   </form>
   <div class="modal-foot"><span class="hint">Ctrl/⌘ + Invio per salvare${e.updatedAt ? ' · aggiornato ' + fmtDateTime(e.updatedAt) + (e.updatedBy ? ' da ' + esc(e.updatedBy) : '') : ''}</span>
@@ -2158,9 +2244,9 @@ async function openElementEditor(roomId, key) {
   Ed.entry = openModal({ html, drawer: true, wide: true, onRequestClose: () => closeElementEditor() });
   const el = Ed.entry.el, form = el.querySelector('#elForm');
   refreshEditorSide();
-  form.addEventListener('input', ev => { if (ev.target.closest('.comments')) return; Ed.dirty = true; const f = ev.target.closest('.field'); if (f) { f.classList.remove('invalid'); if (ev.target.id.startsWith('e_s_')) f.classList.toggle('filled', !!ev.target.value.trim()); } });
+  form.addEventListener('input', ev => { if (ev.target.closest('.comments, .qadd')) return; Ed.dirty = true; const f = ev.target.closest('.field'); if (f) { f.classList.remove('invalid'); if (ev.target.id.startsWith('e_s_')) f.classList.toggle('filled', !!ev.target.value.trim()); } });
   form.addEventListener('change', ev => {
-    if (ev.target.closest('.comments')) return;
+    if (ev.target.closest('.comments, .qadd')) return;
     Ed.dirty = true; const t = ev.target;
     if (t.id.startsWith('e_s_')) t.closest('.field').classList.toggle('filled', !!t.value);
     if (t.name === 'e_status') {
@@ -2170,7 +2256,7 @@ async function openElementEditor(roomId, key) {
     }
     if (t.id === 'e_blocking') { el.querySelector('#edBlockT').classList.toggle('on', t.checked); el.querySelector('#bworkWrap').classList.toggle('hidden', !t.checked); if (t.checked) el.querySelector('#e_bwork').focus(); }
   });
-  form.addEventListener('submit', ev => { ev.preventDefault(); if (document.activeElement && document.activeElement.closest('.comments')) return; saveElement(); });
+  form.addEventListener('submit', ev => { ev.preventDefault(); if (document.activeElement && document.activeElement.closest('.comments, .qadd')) return; saveElement(); });
   el.querySelector('[data-e=save]').onclick = () => saveElement();
   el.querySelector('[data-e=cancel]').onclick = () => closeElementEditor();
   el.querySelector('[data-e=close]').onclick = () => closeElementEditor();
@@ -2181,8 +2267,13 @@ function refreshEditorSide() {
   const el = Ed.entry.el, { roomId, key } = Ed;
   const cbox = el.querySelector('#edComments'); if (cbox && !cbox.contains(document.activeElement)) cbox.innerHTML = commentsBlock({ roomId, element: key });
   const list = sortIssues(db.issues.filter(i => i.roomId === roomId && i.element === key));
-  el.querySelector('#edIssues').innerHTML = (list.length ? `<div class="card" style="box-shadow:none">${list.map(qRow).join('')}</div>` : '<div class="muted" style="font-size:12.5px;margin-bottom:8px">Nessuna questione collegata a questo elemento.</div>')
-    + `<button type="button" class="btn btn-sm" data-e="newq" style="margin-top:8px">${ic('plus')}Nuova questione su questo elemento</button>`;
+  const box = el.querySelector('#edIssues'), keep = box.querySelector('.qa-title'), typed = keep && document.activeElement === keep ? keep.value : null;
+  const open = list.filter(isOpen), closed = list.filter(isClosed);
+  box.innerHTML = (open.length ? `<div class="ptlist">${pointRows(open, 'data-action="edit-point"')}</div>` : '')
+    + quickAdd(roomId, key)
+    + (closed.length ? `<details class="pt-closed"><summary>${plural(closed.length, 'punto chiuso', 'punti chiusi')}</summary><div class="ptlist">${pointRows(closed, 'data-action="edit-point"')}</div></details>` : '')
+    + `<button type="button" class="btn btn-sm btn-ghost" data-e="newq" style="margin-top:6px">${ic('edit')}Nuovo punto con tutti i dettagli</button>`;
+  if (typed != null) { const t = box.querySelector('.qa-title'); t.value = typed; t.focus(); }
   el.querySelector('[data-e=newq]').onclick = () => openIssueForm({ roomId, element: key });
   const ids = new Set(list.map(i => i.id));
   const logs = db.log.filter(l => l.roomId === roomId && (l.element === key || (l.issueId && ids.has(l.issueId)))).slice(0, 15);
@@ -2232,8 +2323,7 @@ async function saveElement() {
     });
     Ed.busy = false; Ed.dirty = false; Ed.entry.close(); Ed.entry = null;
     UI.highlight = roomId + ':' + key; render();
-    const openQ = elIssues(roomId, key).length;
-    toast(`${def.name} · ${room.name}: salvato (${v.status}).${v.status === 'Deciso' && openQ ? ` Restano ${plural(openQ, 'questione aperta', 'questioni aperte')}.` : ''}`, 'success');
+    toast(`${def.name} · ${room.name}: salvato (${v.status}).${v.status === 'Deciso' && elIssues(roomId, key).some(isPending) ? ` Restano punti aperti: l’elemento resta «in definizione» finché non sono definiti.` : ''}`, 'success');
     void diff;
   } catch (err) {
     Ed.busy = false; btn.disabled = false; btn.innerHTML = ic('check') + 'Salva elemento';
@@ -2376,6 +2466,46 @@ async function submitIssueForm() {
     showFormError('Salvataggio non riuscito: ' + err.message + '. Il testo inserito è stato conservato. Riprova; se il problema persiste, esporta un backup e apri l’app in Chrome o Edge.');
   }
 }
+
+/* ---------------- Aggiunta rapida di un punto (questione) ---------------- */
+async function quickAddIssue(box) {
+  if (!box || !isStaff() || box.dataset.busy) return;
+  const roomId = box.dataset.room, element = box.dataset.el;
+  const tIn = box.querySelector('.qa-title'), bIn = box.querySelector('.qa-b'), wIn = box.querySelector('.qa-work');
+  const title = tIn.value.trim(), blocking = bIn.checked, work = wIn.value.trim();
+  if (!title) { tIn.focus(); tIn.classList.add('bad'); toast('Scrivi il titolo del punto da aggiungere.', 'info'); return; }
+  if (blocking && !work) { wIn.focus(); wIn.classList.add('bad'); toast('Per un punto bloccante indica quale lavorazione blocca.', 'info'); return; }
+  const v = { ...blankIssue(), roomId, element: EL[element] ? element : 'generale', discipline: EL[element] ? EL[element].disc : 'Altro', title, requestedDecision: title, blocking, affectedWork: blocking ? work : '' };
+  if (validateIssue(v).length) { toast(validateIssue(v)[0][1], 'error'); return; }
+  box.dataset.busy = '1'; const btn = box.querySelector('[data-action=quick-issue]'); btn.disabled = true;
+  try {
+    const id = await commit(d => {
+      const now = nowISO(), actor = Prefs.data.operator || '';
+      const nid = nextIssueId(d, roomId);
+      const issue = normalizeIssue({ ...v, id: nid, createdAt: now, updatedAt: now, createdBy: actor, updatedBy: actor });
+      d.issues.push(issue);
+      addLog(d, { roomId, issueId: nid, element: issue.element, action: `Creata ${nid} · ${issue.title}`, details: [elName(issue.element), issue.status + (issue.blocking ? ' · bloccante' : '')] });
+      return nid;
+    });
+    UI.highlight = id; render(); refreshEditorSide();
+    const again = Ed.entry ? Ed.entry.el.querySelector('#edIssues .qa-title') : document.querySelector(`.qadd[data-room="${roomId}"][data-el="${element}"] .qa-title`);
+    if (again) again.focus({ preventScroll: true });
+    toast(`${id} aggiunto: «${title}». Aprilo per responsabile, scadenza e decisione.`, 'success', { actionLabel: 'Completa', onAction: () => openIssueForm({ id }) });
+  } catch (err) {
+    delete box.dataset.busy; btn.disabled = false;
+    toast('Punto non salvato: ' + err.message, 'error');
+  }
+}
+document.addEventListener('change', ev => {
+  const b = ev.target.closest && ev.target.closest('.qa-b'); if (!b) return;
+  const box = b.closest('.qadd'); box.querySelector('.qa-work').classList.toggle('hidden', !b.checked); box.querySelector('.qa-blk').classList.toggle('on', b.checked);
+  if (b.checked) box.querySelector('.qa-work').focus();
+});
+document.addEventListener('keydown', ev => {
+  const t = ev.target; if (ev.key !== 'Enter' || !t.closest || !t.closest('.qadd') || t.type === 'checkbox') return;
+  ev.preventDefault(); ev.stopPropagation(); quickAddIssue(t.closest('.qadd'));
+}, true);
+document.addEventListener('input', ev => { if (ev.target.classList && ev.target.classList.contains('bad')) ev.target.classList.remove('bad'); });
 
 /* ---------------- Dettaglio questione ---------------- */
 function openIssueDrawer(id) {
@@ -2537,6 +2667,10 @@ const ACTIONS = {
   'edit-issue': el => openIssueForm({ id: el.dataset.id }),
   'restore-issue': el => restoreIssue(el.dataset.id),
   'save-notes': el => saveRoomNotes(el.dataset.room),
+  'quick-issue': el => quickAddIssue(el.closest('.qadd')),
+  'open-general': el => { go('ambiente-' + el.dataset.room); setTimeout(() => { const g = document.querySelector('.gen-card'); if (g) { g.scrollIntoView({ behavior: 'smooth', block: 'center' }); g.querySelector('.qa-title')?.focus({ preventScroll: true }); } }, 60); },
+  'gen-register': () => { UI.filters = { ...defaultFilters(), element: 'generale', status: 'open' }; setFilters({}); go('questioni'); },
+  'edit-point': el => openIssueForm({ id: el.dataset.id }),
   'room-closed': el => { UI.filters = { ...defaultFilters(), room: el.dataset.room, status: 'Chiuso' }; setFilters({}); go('questioni'); },
   'kpi': el => {
     const k = el.dataset.k;
@@ -2682,7 +2816,8 @@ function elementTableSpec(roomId, mode, keys = ELEMENTS.map(e => e.key)) {
   const cols = internal ? [['el', 'Elemento', 38], ['state', 'Stato', 24], ['specs', 'Specifiche', 104], ['dec', 'Soluzione / note tecniche', 84], ['doc', 'Riferimento / approvazioni', 48], ['resp', 'Chi decide · entro', 44], ['risk', 'Riservato Ediletica', 54]]
     : [['el', 'Elemento', 40], ['state', 'Stato', 26], ['specs', 'Specifiche', 120], ['dec', 'Soluzione / note tecniche', 100], ['doc', 'Riferimento / approvazioni', 56], ['resp', 'Chi decide · entro', 54]];
   const rows = keys.map(k => { const def = EL[k], el = db.rooms[roomId].elements[k], s = elState(roomId, k);
-    const v = { el: def.name, state: stateText(roomId, k, el), specs: specsText(def, el) || (s === 'na' ? '' : 'Da definire'), dec: el.decision || '-', doc: [el.documentReference, apText(el.approvals)].filter(Boolean).join('\n') || '-', resp: s === 'decided' || s === 'na' ? (el.owner || '-') : respText(el.owner, el.dueDate, elOverdue(el)), risk: riskText(el) };
+    const pts = sortIssues(elIssues(roomId, k)).map(i => `${i.id} ${i.title} (${i.status}${isBlocking(i) ? ', BLOCCANTE' : ''})${i.agreedDecision ? ': ' + i.agreedDecision : ''}`);
+    const v = { el: def.name, state: stateText(roomId, k, el), specs: specsText(def, el) || (s === 'na' ? '' : pts.length ? '-' : 'Da definire'), dec: [el.decision, pts.length ? 'Punti:\n' + pts.map(x => '- ' + x).join('\n') : ''].filter(Boolean).join('\n') || '-', doc: [el.documentReference, apText(el.approvals)].filter(Boolean).join('\n') || '-', resp: s === 'decided' || s === 'na' ? (el.owner || '-') : respText(el.owner, el.dueDate, elOverdue(el)), risk: riskText(el) };
     return { cells: cols.map(([c]) => v[c]), meta: { state: s, overdue: elOverdue(el) } }; });
   return { kind: 'elements', keys: cols.map(c => c[0]), head: cols.map(c => c[1]), widths: cols.map(c => c[2]), body: rows.map(r => r.cells), meta: rows.map(r => r.meta) };
 }
@@ -2772,11 +2907,14 @@ function roomBlocks(r, rd, level = 1) {
   const iss = sortIssues(db.issues.filter(i => i.roomId === r.id && (rd.includeClosed || isOpen(i))));
   b.push({ type: 'heading', level, kicker: r.floor + ' · ' + r.id, text: level === 1 ? r.name : `${r.id} · ${r.name}`, right: `${p.decided}/${p.applicable} elementi decisi (${p.pct}%) · ${plural(db.issues.filter(i => i.roomId === r.id && isOpen(i)).length, 'questione aperta', 'questioni aperte')}`, keep: 45 });
   if (level === 1) b.push({ type: 'stats', items: [['Decisi', `${p.decided}/${p.applicable}`, 'green'], ['In definizione', p.progress, 'amber'], ['Da definire', p.todo], ['Bloccanti', p.block, 'red'], ['Questioni aperte', iss.filter(isOpen).length], ['Scadute', iss.filter(isOverdue).length + ELEMENTS.filter(e => elOverdue(data.elements[e.key])).length, 'amber']] });
-  if (data.notes.trim()) b.push({ type: 'note', label: 'Criticità e note generali', text: data.notes.trim() });
+  if (data.notes.trim()) b.push({ type: 'note', label: 'Note dell’ambiente', text: data.notes.trim() });
+  const gen = iss.filter(i => i.element === 'generale');
+  if (gen.length) { b.push({ type: 'heading', level: 3, text: 'Argomenti generali' }); b.push({ type: 'table', spec: issueTableSpec(gen, rd.mode) }); }
   if (rd.includeImages && data.images.length) b.push({ type: 'images', images: data.images });
   b.push({ type: 'heading', level: 3, text: 'Scheda decisioni per elemento' });
   b.push({ type: 'table', spec: elementTableSpec(r.id, rd.mode) });
-  if (iss.length) { b.push({ type: 'heading', level: 3, text: rd.includeClosed ? 'Questioni' : 'Questioni aperte' }); b.push({ type: 'table', spec: issueTableSpec(iss, rd.mode) }); }
+  const elq = iss.filter(i => i.element !== 'generale');
+  if (elq.length) { b.push({ type: 'heading', level: 3, text: rd.includeClosed ? 'Punti sugli elementi' : 'Punti aperti sugli elementi' }); b.push({ type: 'table', spec: issueTableSpec(elq, rd.mode) }); }
   return b;
 }
 function buildReport(rd) {
@@ -3425,6 +3563,16 @@ const EN_NOUNS = {
 };
 const T = (s) => trCore(s);
 const RULES = [
+  [/^(\d+) (punto|punti)$/, (m, a) => `${a} ${+a === 1 ? 'point' : 'points'}`],
+  [/^\+ (\d+) altri punti$/, (m, a) => `+ ${a} more points`],
+  [/^(\d+) (aperto|aperti)$/, (m, a) => `${a} open`],
+  [/^(\d+) (bloccante|bloccanti)$/, (m, a) => `${a} blocking`],
+  [/^(\d+) (argomento chiuso|argomenti chiusi)$/, (m, a) => `${a} closed ${+a === 1 ? 'topic' : 'topics'}`],
+  [/^(\d+) (punto chiuso|punti chiusi)$/, (m, a) => `${a} closed ${+a === 1 ? 'point' : 'points'}`],
+  [/^(\d+) (argomento non chiuso|argomenti non chiusi)$/, (m, a) => `${a} open ${+a === 1 ? 'topic' : 'topics'}`],
+  [/^(.+) aggiunto: «(.+)»\. (.+)$/, (m, a, b, c) => `${a} added: “${b}”. ${trCore(c)}`],
+  [/^blocca (.+)$/, (m, a) => `blocks ${a}`],
+  [/^Punto non salvato: (.+)$/, (m, a) => `Point not saved: ${trCore(a)}`],
   [/^Verrà generata una nuova password per (.+)\. Quella attuale smetterà di funzionare\.$/, (m, a) => `A new password will be generated for ${a}. The current one will stop working.`],
   [/^Importazione completata: (.+)\.$/, (m, a) => `Import completed: ${trCore(a)}.`],
   [/^(Commento non inviato|Elenco utenti non disponibile|Importazione non riuscita): (.+)$/, (m, a, b) => `${trCore(a)}: ${trCore(b)}`],
@@ -3521,6 +3669,21 @@ Object.assign(EN, {
   'Importare il backup nell’archivio online?': 'Import the backup into the online archive?', 'Importa': 'Import', 'Importazione in corso…': 'Import in progress…',
   'I dati vengono unire all’archivio online': 'Data is merged into the online archive', 'Funzione non disponibile nella versione online.': 'Feature not available in the online version.',
   'Nessuna nota.': 'No notes.', 'account disattivato: contatta l’amministratore Ediletica': 'account deactivated: contact the Ediletica administrator', 'troppi tentativi: attendi qualche minuto e riprova': 'too many attempts: wait a few minutes and try again', 'Codice di configurazione': 'Setup code', 'Inserisci il codice di configurazione ricevuto.': 'Enter the setup code you received.', 'Codice di configurazione non valido': 'Invalid setup code', 'Configurazione iniziale già completata': 'Initial setup already completed', 'Esiste già un utente con questa email': 'A user with this email already exists', 'Deve restare almeno un amministratore attivo': 'At least one active administrator must remain', 'Operazione riservata agli amministratori': 'Administrators only', 'Importazione non riuscita': 'Import failed', 'Il tuo profilo': 'Your profile', 'Ediletica S.r.l. · Ufficio Tecnico': 'Ediletica S.r.l. · Technical Office'
+});
+
+Object.assign(EN, {
+  'Argomenti generali': 'General topics', 'Generali': 'General', 'Argomenti generali di ogni ambiente': 'General topics of every room',
+  'Temi dell’ambiente che non ricadono in un elemento: accessi, vincoli di cantiere, permessi, interferenze, sequenze di lavoro… Ognuno ha stato, responsabile, scadenza e decisione propri.': 'Room topics that do not belong to a single element: access, site constraints, permits, interferences, work sequences… Each one has its own status, owner, deadline and decision.',
+  'Nuovo argomento, es. «Accesso mezzi dal cortile»': 'New topic, e.g. “Vehicle access from the courtyard”',
+  'Nuovo punto, es. «Parete nord: finitura» o «Quadro elettrico: posizione»': 'New point, e.g. “North wall: finish” or “Electrical panel: position”',
+  'Titolo del nuovo punto': 'Title of the new point', 'Bloccante': 'Blocking', 'Quale lavorazione blocca?': 'Which work does it block?', 'Lavorazione bloccata': 'Blocked work', 'Aggiungi': 'Add',
+  'Punti da decidere in questo elemento': 'Points to decide in this element',
+  'Quando nello stesso elemento ci sono scelte distinte (es. pareti con finiture diverse) o più punti bloccanti, aggiungi un punto per ciascuno: ognuno ha stato, responsabile, scadenza e decisione propri. L’elemento resta «in definizione» finché ci sono punti aperti.': 'When the same element involves separate choices (e.g. walls with different finishes) or several blocking points, add one point for each: every point has its own status, owner, deadline and decision. The element stays “in progress” while points are open.',
+  'Nuovo punto con tutti i dettagli': 'New point with full details', 'Note dell’ambiente': 'Room notes', 'Tutte le questioni aperte dell’ambiente': 'All open questions in the room',
+  'Scrivi il titolo del punto da aggiungere.': 'Write the title of the point to add.', 'Per un punto bloccante indica quale lavorazione blocca.': 'For a blocking point, state which work it blocks.',
+  'Punti sugli elementi': 'Points on elements', 'Punti aperti sugli elementi': 'Open points on elements', 'Punti:': 'Points:', 'nessuno aperto': 'none open',
+  'Aprilo per responsabile, scadenza e decisione.': 'Open it to set owner, deadline and decision.', 'Completa': 'Complete', 'Nessun argomento': 'No topics',
+  'Restano punti aperti: l’elemento resta «in definizione» finché non sono definiti.': 'Some points are still open: the element stays “in progress” until they are defined.'
 });
 const EN_LC = new Map(Object.entries(EN).map(([k, v]) => [k.trim().toLowerCase(), v]));
 const _trCache = new Map();
@@ -3841,11 +4004,12 @@ function openElementView(roomId, key) {
   <div class="modal-body">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${spill(s, s === 'block')}${e.dueDate && s !== 'decided' ? `<span class="tag ${elOverdue(e) ? 'red' : ''}">${ic('calendar')}${fmtDate(e.dueDate)}</span>` : ''}</div>
     ${s === 'block' && e.blockingWork ? `<div class="callout danger" style="margin-bottom:14px">${ic('alert')}<div><b>Blocca:</b> ${esc(e.blockingWork)}</div></div>` : ''}
+    ${iss.length ? `<div class="fsec-title">Punti da decidere in questo elemento</div><div class="ptlist" style="margin-bottom:18px">${pointRows(iss)}</div>` : ''}
     <div class="fsec-title">Specifiche · ${esc(def.name)}</div>
     <dl class="kv" style="margin-bottom:18px">${def.fields.map(f => row(esc(f.label), e.specs[f.k] ? esc(e.specs[f.k]) : '<span class="muted">—</span>')).join('')}</dl>
     <div class="fsec-title">Soluzione e documentazione</div>
     <dl class="kv" style="margin-bottom:18px">${row('Descrizione della soluzione / note tecniche', esc(e.decision || '—'))}${row('Riferimento documentale', esc(e.documentReference || '—'))}${row('Chi deve decidere / rispondere', esc(e.owner || 'Da assegnare'))}${row('Approvazioni', APPROVALS.map(([k, l]) => `${e.approvals[k] ? '✓' : '○'} ${esc(l)}`).join('<br>'))}</dl>
-    ${iss.length ? `<div class="fsec-title">Questioni su questo elemento</div><div class="card" style="box-shadow:none;margin-bottom:18px">${iss.map(qRow).join('')}</div>` : ''}
+
     <div class="fsec-title">Commenti e risposte</div>${commentsBlock({ roomId, element: key })}
   </div>` });
   entry.el.querySelector('[data-v=x]').onclick = () => entry.close();
