@@ -586,6 +586,21 @@ body.auth-on #authRoot{display:block}
 .float-head table.reg th{position:static}
 .float-head .matrix thead th{position:static;box-shadow:none}
 .float-head .matrix thead th.mx-room{position:sticky;left:0}
+/* aggiunta rapida: stato e scadenza (4.7) */
+.qadd .qa-status{height:36px;border:1px solid var(--line);border-radius:9px;padding:0 8px;font:inherit;font-size:13px;background:#fff;color:var(--ink-2)}
+.qadd .qa-date{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 8px 0 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--muted)}
+.qadd .qa-date .svg{width:15px;height:15px}
+.qadd .qa-date input{border:0;height:34px;font:inherit;font-size:13px;background:none;color:var(--ink-2);padding:0;width:128px}
+.dl-head{margin-top:26px}
+.dl-head.late h2{color:var(--blk)}
+.dl-table td{vertical-align:top}
+.dl-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:4px}
+.dl-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-sm,0 1px 2px rgba(10,30,50,.05))}
+.dl-stat .l{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.dl-stat .l i{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.dl-stat .v{font-size:30px;font-weight:750;line-height:1.1;margin-top:6px;color:var(--ink)}
+.dl-stat .h{font-size:12px;color:var(--muted)}
+@media (max-width:900px){.dl-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 </style>
 </head>
@@ -1054,7 +1069,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    EDILETICA – Room Coordination Manager · v3.0
    Core: configurazione, catalogo elementi, utilità, persistenza, modello
    ===================================================================== */
-const APP_VERSION = '4.6';
+const APP_VERSION = '4.7';
 const SCHEMA = 3;
 
 const PROJECT = {
@@ -1206,6 +1221,38 @@ function isoDate(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-'
 function todayISO() { return isoDate(new Date()); }
 function addDaysISO(days) { const d = new Date(); d.setDate(d.getDate() + days); return isoDate(d); }
 function nowISO() { return new Date().toISOString(); }
+/* ---------- Scadenze ---------- */
+const WEEKDAYS = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
+function parseISO(d) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function daysTo(d) { const a = parseISO(todayISO()), b = parseISO(d); return b ? Math.round((b - a) / 86400000) : null; }
+function weekStartISO(d) { const x = parseISO(d); const wd = (x.getDay() + 6) % 7; x.setDate(x.getDate() - wd); return isoDate(x); }
+function fmtDay(d) { const x = parseISO(d); return x ? `${WEEKDAYS[x.getDay()]} ${fmtDate(d)}` : '—'; }
+function relDays(d) { const n = daysTo(d); if (n == null) return ''; if (n === 0) return 'oggi'; if (n === 1) return 'domani'; if (n === -1) return 'ieri'; return n > 0 ? `tra ${n} giorni` : `${-n} giorni fa`; }
+const DL_RANGES = [['all', 'Tutte le date'], ['overdue', 'Solo scadute'], ['7', 'Scadute ed entro 7 giorni'], ['30', 'Scadute ed entro 30 giorni']];
+const DL_INCLUDE = [['pending', 'Solo da definire (aperti e in verifica)'], ['open', 'Anche i definiti non chiusi'], ['all', 'Tutti, anche chiusi']];
+function deadlineItems(o = {}) {
+  const { range = 'all', include = 'pending', owner = '', floor = '' } = o;
+  return db.issues.filter(i => i.dueDate && ROOM[i.roomId])
+    .filter(i => include === 'all' ? true : include === 'open' ? isOpen(i) : isPending(i))
+    .filter(i => !owner || (i.answerOwner || '') === owner)
+    .filter(i => !floor || ROOM[i.roomId].floorId === floor)
+    .filter(i => { const n = daysTo(i.dueDate); return range === 'all' ? true : range === 'overdue' ? n < 0 : n <= +range; })
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || (isBlocking(b) - isBlocking(a)) || a.id.localeCompare(b.id));
+}
+function deadlineGroups(list) {
+  const today = todayISO(), thisWeek = weekStartISO(today), next = parseISO(thisWeek); next.setDate(next.getDate() + 7); const nextWeek = isoDate(next);
+  const groups = [], byKey = {};
+  const put = (key, label, sub, i) => { if (!byKey[key]) { byKey[key] = { key, label, sub, items: [] }; groups.push(byKey[key]); } byKey[key].items.push(i); };
+  list.forEach(i => {
+    const n = daysTo(i.dueDate);
+    if (n < 0 && isPending(i)) return put('overdue', 'Scaduti', '', i);
+    const ws = weekStartISO(i.dueDate), we = parseISO(ws); we.setDate(we.getDate() + 6);
+    const range = `${fmtDate(ws)} – ${fmtDate(isoDate(we))}`;
+    const label = ws === thisWeek ? 'Questa settimana' : ws === nextWeek ? 'Prossima settimana' : ws < thisWeek ? 'Settimane passate' : 'Settimana dal ' + fmtDate(ws);
+    put(ws < thisWeek ? 'past' : ws, label, ws < thisWeek ? '' : range, i);
+  });
+  return groups;
+}
 function fmtDate(iso) { if (!iso) return '—'; const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso); return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso); }
 function fmtDateTime(iso) { if (!iso) return '—'; const d = new Date(iso); if (isNaN(d)) return String(iso); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 function fmtRel(iso) {
@@ -1782,6 +1829,7 @@ function parseHash() {
   if (h === 'decisioni') return { view: 'decisions' };
   if (h === 'argomenti' || h === 'questioni' || h === 'registro') return { view: 'register' };
   if (h === 'report') return { view: 'reports' };
+  if (h === 'scadenze') return { view: 'deadlines' };
   if (h === 'dati') return { view: 'data' };
   if (h === 'utenti') return { view: 'users' };
   return { view: 'dashboard' };
@@ -1819,6 +1867,8 @@ function quickAdd(roomId, element) {
   const ph = element === 'generale' ? 'Nuovo argomento, es. «Accesso mezzi dal cortile»' : 'Nuovo argomento, es. «Parete nord: finitura» o «Quadro elettrico: posizione»';
   return `<div class="qadd staff-only" data-room="${roomId}" data-el="${element}">
     <input class="qa-title" maxlength="140" placeholder="${esc(ph)}" aria-label="Titolo del nuovo punto">
+    <select class="qa-status" aria-label="Stato del nuovo argomento" title="Stato">${['Aperto', 'In verifica', 'Definito', 'Chiuso'].map(x => `<option value="${x}">${x}</option>`).join('')}</select>
+    <label class="qa-date" title="Scadenza (facoltativa)">${ic('calendar')}<input type="date" class="qa-due" aria-label="Scadenza"></label>
     <label class="qa-blk"><input type="checkbox" class="qa-b">Bloccante</label>
     <input class="qa-work hidden" maxlength="140" placeholder="Quale lavorazione blocca?" aria-label="Lavorazione bloccata">
     <button type="button" class="btn btn-sm btn-primary" data-action="quick-issue">${ic('plus')}Aggiungi</button></div>`;
@@ -1867,6 +1917,7 @@ function render() {
   else if (r.view === 'decisions') { v.innerHTML = viewDecisions(); renderDecResults(); }
   else if (r.view === 'register') { v.innerHTML = viewRegister(); renderRegResults(); }
   else if (r.view === 'reports') v.innerHTML = viewReports();
+  else if (r.view === 'deadlines') v.innerHTML = viewDeadlines();
   else if (r.view === 'data') v.innerHTML = viewData();
   else if (r.view === 'users') v.innerHTML = viewUsers();
   else v.innerHTML = viewDashboard();
@@ -1881,7 +1932,7 @@ function renderChrome() {
   const r = UI.route;
   const openQ = db.issues.filter(isOpen).length;
   const pp = projectProgress();
-  const nav = [['dashboard', '', 'grid', 'Panoramica'], ['decisions', 'decisioni', 'compare', 'Decisioni per elemento'], ['register', 'argomenti', 'question', 'Argomenti aperti', openQ], ['reports', 'report', 'printer', 'Report e stampe']];
+  const nav = [['dashboard', '', 'grid', 'Panoramica'], ['decisions', 'decisioni', 'compare', 'Decisioni per elemento'], ['register', 'argomenti', 'question', 'Argomenti aperti', openQ], ['deadlines', 'scadenze', 'calendar', 'Scadenze', db.issues.filter(isOverdue).length || null], ['reports', 'report', 'printer', 'Report e stampe']];
   if (isStaff()) nav.push(['data', 'dati', 'db', 'Dati e backup']);
   if (isAdmin()) nav.push(['users', 'utenti', 'users', 'Utenti']);
   $('#nav').innerHTML = nav.map(([v, path, icon, label, cnt]) => `<button class="${r.view === v ? 'sel' : ''}" data-action="nav" data-path="${path}">${ic(icon)}<span>${label}</span>${cnt != null ? `<span class="count">${cnt}</span>` : ''}</button>`).join('');
@@ -1897,7 +1948,7 @@ function renderChrome() {
     <div style="margin-top:6px;color:#6c89a3">RCM v${APP_VERSION}</div>`;
   let crumbs = `<span>${esc(PROJECT.short)}</span>`;
   if (r.view === 'room') { const rm = ROOM[r.id]; crumbs += ic('right') + `<span>${esc(rm.floor)}</span>` + ic('right') + `<b>${esc(rm.name)}</b>`; }
-  else crumbs += ic('right') + `<b>${{ dashboard: 'Panoramica', decisions: 'Decisioni per elemento', register: 'Argomenti aperti', reports: 'Report e stampe', data: 'Dati e backup', users: 'Utenti' }[r.view]}</b>`;
+  else crumbs += ic('right') + `<b>${{ dashboard: 'Panoramica', decisions: 'Decisioni per elemento', register: 'Argomenti aperti', deadlines: 'Scadenze', reports: 'Report e stampe', data: 'Dati e backup', users: 'Utenti' }[r.view]}</b>`;
   $('#crumbs').innerHTML = crumbs;
   $('#sidebar').classList.remove('open');
 }
@@ -2141,6 +2192,36 @@ function filtersDescription(f) {
   if (f.q) d.push('ricerca «' + f.q + '»');
   return d.length ? d.join(' · ') : 'tutti gli argomenti';
 }
+/* ---------------- Vista: Scadenze ---------------- */
+function viewDeadlines() {
+  const f = UI.dl || (UI.dl = { range: 'all', include: 'pending', owner: '', floor: '' });
+  const list = deadlineItems(f), groups = deadlineGroups(list);
+  const pend = db.issues.filter(isPending), owners = [...new Set(db.issues.filter(i => i.dueDate).map(i => i.answerOwner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+  const over = pend.filter(i => i.dueDate && daysTo(i.dueDate) < 0).length, week = pend.filter(i => i.dueDate && daysTo(i.dueDate) >= 0 && daysTo(i.dueDate) <= 7).length;
+  const month = pend.filter(i => i.dueDate && daysTo(i.dueDate) >= 0 && daysTo(i.dueDate) <= 30).length, noDate = pend.filter(i => !i.dueDate).length;
+  const opt = (v, l, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`;
+  const stat = (cls, color, l, v, h) => `<div class="dl-stat" style="--c:${color}"><div class="l"><i></i>${l}</div><div class="v">${v}</div><div class="h">${h}</div></div>`;
+  const row = i => { const n = daysTo(i.dueDate), late = n < 0 && isPending(i), room = ROOM[i.roomId];
+    return `<tr class="${isBlocking(i) ? 'is-block' : ''}" data-action="open-issue" data-id="${esc(i.id)}"><td class="nowrap"><b class="${late ? 'overdue' : ''}">${fmtDay(i.dueDate)}</b><div class="dim" style="font-size:11.5px;${late ? 'color:var(--blk)' : n <= 7 && isPending(i) ? 'color:#93600a' : ''}">${relDays(i.dueDate)}</div></td>
+      <td class="nowrap"><span class="mono dim" style="font-size:11px">${room.id}</span> ${esc(room.name)}</td><td class="nowrap">${EL[i.element] ? ic(EL[i.element].icon) + ' ' + esc(EL[i.element].short || EL[i.element].name) : ic('alert') + ' Generali'}</td>
+      <td><span class="mono" style="font-size:11.5px;color:var(--accent);font-weight:650">${esc(i.id)}</span> <b>${esc(i.title)}</b>${isBlocking(i) ? ` ${blockFlag()}${i.affectedWork ? `<div class="dim" style="font-size:11.5px">blocca ${esc(i.affectedWork)}</div>` : ''}` : ''}</td>
+      <td>${esc(i.answerOwner || 'Da assegnare')}</td><td class="nowrap">${statusChip(i.status)}</td></tr>`; };
+  return `
+  <div class="page-head"><div><div class="page-kicker">${ic('calendar')} Calendario decisioni</div><h1 class="page-title">Scadenze</h1>
+    <div class="page-sub">Gli argomenti con una data di scadenza, in ordine di data e raggruppati per settimana. Clic su una riga per aprirla.</div></div>
+    <div class="actions"><button class="btn" data-action="dl-pdf">${ic('printer')}PDF scadenze</button></div></div>
+  <div class="dl-stats">${stat('block', '#ef5a4c', 'Scaduti', over, 'da definire')}${stat('progress', '#e6a43a', 'Entro 7 giorni', week, 'da definire')}${stat('todo', '#7fb2dc', 'Entro 30 giorni', month, 'da definire')}${stat('todo', '#9aa6b2', 'Senza scadenza', noDate, 'argomenti aperti senza data')}</div>
+  <section class="card" style="margin-top:18px">
+    <div class="filters">
+      <label class="f">Periodo<select data-dl="range">${DL_RANGES.map(([v, l]) => opt(v, l, f.range)).join('')}</select></label>
+      <label class="f">Argomenti<select data-dl="include">${DL_INCLUDE.map(([v, l]) => opt(v, l, f.include)).join('')}</select></label>
+      <label class="f">Chi decide<select data-dl="owner"><option value="">Tutti</option>${owners.map(o => opt(o, o, f.owner)).join('')}</select></label>
+      <label class="f">Piano<select data-dl="floor"><option value="">Tutti</option>${FLOORS.map(x => opt(x.id, x.name, f.floor)).join('')}</select></label>
+    </div></section>
+  ${groups.length ? groups.map(g => `<div class="section-title dl-head ${g.key === 'overdue' ? 'late' : ''}"><h2>${esc(g.label)}</h2>${g.sub ? `<span class="muted">${esc(g.sub)}</span>` : ''}<span class="line"></span><span class="muted">${plural(g.items.length, 'argomento', 'argomenti')}</span></div>
+    <section class="card"><div class="tablewrap"><table class="reg dl-table"><thead><tr><th>Scadenza</th><th>Ambiente</th><th>Ambito</th><th>Argomento</th><th>Chi decide</th><th>Stato</th></tr></thead><tbody>${g.items.map(row).join('')}</tbody></table></div></section>`).join('')
+    : `<section class="card" style="margin-top:18px">${emptyState('calendar', 'Nessuna scadenza con questi filtri', noDate ? `Ci sono ${plural(noDate, 'argomento aperto', 'argomenti aperti')} senza data: aprili e indica una scadenza.` : '')}</section>`}`;
+}
 function viewRegister() {
   const f = UI.filters;
   const owners = [...new Set(db.issues.map(i => i.answerOwner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
@@ -2148,7 +2229,7 @@ function viewRegister() {
   const chip = (k, cls, icon, label) => `<button class="chip ${f[k] ? 'on ' + cls : ''}" data-action="reg-chip" data-flag="${k}" aria-pressed="${f[k]}">${ic(icon)}${label}</button>`;
   return `
   <div class="page-head"><div><div class="page-kicker">${ic('question')} Registro di commessa</div><h1 class="page-title">Argomenti aperti</h1>
-    <div class="page-sub">Domande e richieste di decisione verso progettisti, DL e fornitori. Ordine: bloccanti, scaduti, aperti o in verifica, definiti, chiuse.</div></div>
+    <div class="page-sub">Domande e richieste di decisione verso progettisti, DL e fornitori. Ordine: bloccanti, scaduti, aperti o in verifica, definiti, chiusi.</div></div>
     <div class="actions"><button class="btn" data-action="reg-csv">${ic('table')}Esporta CSV</button><button class="btn" data-action="reg-pdf">${ic('printer')}PDF elenco</button><button class="btn btn-primary staff-only" data-action="new-issue">${ic('plus')}Nuovo argomento</button></div></div>
   <section class="card">
     <div class="filters">
@@ -2478,12 +2559,13 @@ async function submitIssueForm() {
 async function quickAddIssue(box) {
   if (!box || !isStaff() || box.dataset.busy) return;
   const roomId = box.dataset.room, element = box.dataset.el;
-  const tIn = box.querySelector('.qa-title'), bIn = box.querySelector('.qa-b'), wIn = box.querySelector('.qa-work');
-  const title = tIn.value.trim(), blocking = bIn.checked, work = wIn.value.trim();
+  const tIn = box.querySelector('.qa-title'), bIn = box.querySelector('.qa-b'), wIn = box.querySelector('.qa-work'), sIn = box.querySelector('.qa-status'), dIn = box.querySelector('.qa-due');
+  const title = tIn.value.trim(), blocking = bIn.checked, work = wIn.value.trim(), status = sIn ? sIn.value : 'Aperto', dueDate = dIn ? dIn.value : '';
   if (!title) { tIn.focus(); tIn.classList.add('bad'); toast('Scrivi il titolo del punto da aggiungere.', 'info'); return; }
   if (blocking && !work) { wIn.focus(); wIn.classList.add('bad'); toast('Per un punto bloccante indica quale lavorazione blocca.', 'info'); return; }
-  const v = { ...blankIssue(), roomId, element: EL[element] ? element : 'generale', discipline: EL[element] ? EL[element].disc : 'Altro', title, requestedDecision: '', blocking, affectedWork: blocking ? work : '' };
-  if (validateIssue(v).length) { toast(validateIssue(v)[0][1], 'error'); return; }
+  const v = { ...blankIssue(), roomId, element: EL[element] ? element : 'generale', discipline: EL[element] ? EL[element].disc : 'Altro', title, requestedDecision: '', status, dueDate, blocking, affectedWork: blocking ? work : '' };
+  const qerr = validateIssue(v).filter(e => !(status === 'Chiuso' && ['f_dec', 'f_doc'].includes(e[0])));
+  if (qerr.length) { toast(qerr[0][1], 'error'); return; }
   box.dataset.busy = '1'; const btn = box.querySelector('[data-action=quick-issue]'); btn.disabled = true;
   try {
     const id = await commit(d => {
@@ -2491,13 +2573,13 @@ async function quickAddIssue(box) {
       const nid = nextIssueId(d, roomId);
       const issue = normalizeIssue({ ...v, id: nid, createdAt: now, updatedAt: now, createdBy: actor, updatedBy: actor });
       d.issues.push(issue);
-      addLog(d, { roomId, issueId: nid, element: issue.element, action: `Creato ${nid} · ${issue.title}`, details: [elName(issue.element), issue.status + (issue.blocking ? ' · bloccante' : '')] });
+      addLog(d, { roomId, issueId: nid, element: issue.element, action: `Creato ${nid} · ${issue.title}`, details: [elName(issue.element), issue.status + (issue.blocking ? ' · bloccante' : '') + (issue.dueDate ? ' · entro ' + fmtDate(issue.dueDate) : '')] });
       return nid;
     });
     UI.highlight = id; render(); refreshEditorSide();
     const again = Ed.entry ? Ed.entry.el.querySelector('#edIssues .qa-title') : document.querySelector(`.qadd[data-room="${roomId}"][data-el="${element}"] .qa-title`);
     if (again) again.focus({ preventScroll: true });
-    toast(`${id} aggiunto: «${title}». Aprilo per responsabile, scadenza e decisione.`, 'success', { actionLabel: 'Completa', onAction: () => openIssueForm({ id }) });
+    toast(`${id} aggiunto.`, 'success', { actionLabel: 'Completa', onAction: () => openIssueForm({ id }) });
   } catch (err) {
     delete box.dataset.busy; btn.disabled = false;
     toast('Punto non salvato: ' + err.message, 'error');
@@ -2514,6 +2596,10 @@ document.addEventListener('keydown', ev => {
   ev.preventDefault(); ev.stopPropagation(); quickAddIssue(t.closest('.qadd'));
 }, true);
 document.addEventListener('input', ev => { if (ev.target.classList && ev.target.classList.contains('bad')) ev.target.classList.remove('bad'); });
+document.addEventListener('change', ev => {
+  const t = ev.target; if (!t.dataset || !t.dataset.dl) return;
+  UI.dl = { ...(UI.dl || {}), [t.dataset.dl]: t.value }; const y = window.scrollY; render(); window.scrollTo(0, y);
+});
 
 /* ---------------- Dettaglio argomento ---------------- */
 function openIssueDrawer(id) {
@@ -2698,6 +2784,7 @@ const ACTIONS = {
   'view-point': el => openIssueDrawer(el.dataset.id),
   'toggle-na': () => toggleNotPlanned(),
   'quick-delete': el => deleteIssue(el.dataset.id, { ask: false }),
+  'dl-pdf': () => openReportDialog({ type: 'deadlines' }),
   'quick-resolve': el => quickResolve(el.dataset.id),
   'purge-closed': el => purgeClosed(el.dataset.room, el.dataset.el),
   'room-closed': el => { UI.filters = { ...defaultFilters(), room: el.dataset.room, status: 'Chiuso' }; setFilters({}); go('argomenti'); },
@@ -2824,7 +2911,7 @@ const PDFC = {
 const PAGE = { W: 420, H: 297, M: 14, TOP: 35, BOTTOM: 18 };
 const ST_PDF = { 'Aperto': ['amber', 'amberBg'], 'In verifica': ['blue', 'blueBg'], 'Definito': ['violet', 'violetBg'], 'Chiuso': ['green', 'greenBg'] };
 const EST_PDF = { todo: ['slate', 'slateBg'], progress: ['amber', 'amberBg'], decided: ['green', 'greenBg'], block: ['red', 'redBg'], na: ['naTx', 'naBg'] };
-const REPORT_TYPES = { matrix: 'Matrice delle decisioni', room: 'Scheda ambiente', elements: 'Report per elemento', floor: 'Riepilogo piano', register: 'Registro argomenti', meeting: 'Report riunione', complete: 'Report completo' };
+const REPORT_TYPES = { matrix: 'Matrice delle decisioni', room: 'Scheda ambiente', elements: 'Report per elemento', floor: 'Riepilogo piano', register: 'Registro argomenti', deadlines: 'Scadenze', meeting: 'Report riunione', complete: 'Report completo' };
 
 function pdfSafe(s) {
   return String(tr(String(s ?? ''))).replace(/[‘’‚′]/g, "'").replace(/[“”„″]/g, '"').replace(/[–—−]/g, '-')
@@ -2855,6 +2942,17 @@ function ptsRisk(roomId, key) {
 }
 const ptsMeta = (roomId, key) => ({ state: elState(roomId, key), overdue: elIssues(roomId, key, false).some(isOverdue) });
 
+function deadlineTableSpec(items, mode) {
+  const internal = mode === 'internal';
+  const cols = [['due', 'Scadenza', 34], ['room', 'Ambiente', 52], ['el', 'Ambito', 36], ['title', 'Argomento', internal ? 118 : 156], ['owner', 'Chi decide', 46], ['status', 'Stato', 30], ['work', 'Lavorazione bloccata', 42], ...(internal ? [['risk', 'Riservato Ediletica', 38]] : [])];
+  const body = items.map(i => { const n = daysTo(i.dueDate), late = n < 0 && isPending(i); const v = {
+    due: fmtDay(i.dueDate) + '\n' + (late ? 'SCADUTO · ' : '') + relDays(i.dueDate), room: `${ROOM[i.roomId].name}\n${i.roomId}`, el: EL[i.element] ? EL[i.element].name : 'Argomenti generali',
+    title: `${i.id}  ${i.title}` + (i.requestedDecision ? '\n' + i.requestedDecision : '') + (i.agreedDecision ? '\n-> ' + i.agreedDecision : ''), owner: i.answerOwner || 'Da assegnare',
+    status: i.status + (isBlocking(i) ? '\nBLOCCANTE' : ''), work: isBlocking(i) ? (i.affectedWork || '-') : '-',
+    risk: [i.potentialExtra === 'Sì' ? 'Extra' : '', i.timeImpact === 'Sì' ? 'Tempi' : '', i.escalation ? 'ESCALATION' : '', i.internalNotes].filter(Boolean).join('\n') || '-' };
+    return cols.map(([c]) => v[c]); });
+  return { kind: 'issues', keys: cols.map(c => c[0]), head: cols.map(c => c[1]), widths: cols.map(c => c[2]), body, meta: items.map(i => ({ status: i.status, blocking: isBlocking(i), overdue: daysTo(i.dueDate) < 0 && isPending(i) })) };
+}
 function elementTableSpec(roomId, mode, keys = ELEMENTS.map(e => e.key)) {
   const internal = mode === 'internal';
   const cols = internal ? [['el', 'Ambito', 40], ['state', 'Stato', 26], ['pts', 'Argomenti', 220], ['resp', 'Chi decide · entro', 56], ['risk', 'Riservato Ediletica', 54]]
@@ -2982,8 +3080,18 @@ function buildReport(rd) {
     m.title = rd.scope === 'blocking' ? 'Registro argomenti bloccanti' : 'Registro argomenti';
     B.push({ type: 'heading', level: 1, kicker: 'Registro di commessa', text: label, right: plural(iss.length, 'argomento', 'argomenti') });
     B.push(...summaryBlocks(iss, rd.mode)); B.push({ type: 'pagebreak' });
-    B.push({ type: 'heading', level: 1, kicker: 'Elenco ordinato per priorità', text: 'Argomenti · ' + label, right: 'bloccanti > scaduti > aperti/in verifica > definite > chiuse' });
+    B.push({ type: 'heading', level: 1, kicker: 'Elenco ordinato per priorità', text: 'Argomenti · ' + label, right: 'bloccanti > scaduti > aperti/in verifica > definiti > chiusi' });
     B.push(iss.length ? { type: 'table', spec: issueTableSpec(sortIssues(iss), rd.mode, { showRoom: true }) } : { type: 'note', text: 'Nessun argomento corrisponde ai criteri alla data di emissione.' });
+  } else if (rd.type === 'deadlines') {
+    const f = { range: rd.dlRange, include: rd.dlInclude, owner: rd.dlOwner, floor: rd.dlFloor };
+    const list = deadlineItems(f), groups = deadlineGroups(list);
+    const desc = [DL_RANGES.find(x => x[0] === f.range)[1], f.owner ? 'Chi decide: ' + f.owner : '', f.floor ? FLOOR[f.floor].name : ''].filter(Boolean).join(' · ');
+    m.scope = desc; m.slug = 'Scadenze' + (f.owner ? '_' + f.owner.replace(/[^A-Za-z0-9]+/g, '') : ''); m.count = list.length;
+    B.push({ type: 'heading', level: 1, kicker: 'Calendario decisioni', text: 'Scadenze degli argomenti', right: desc });
+    const pend = db.issues.filter(isPending);
+    B.push({ type: 'stats', items: [['Scaduti', pend.filter(i => i.dueDate && daysTo(i.dueDate) < 0).length, 'red'], ['Entro 7 giorni', pend.filter(i => i.dueDate && daysTo(i.dueDate) >= 0 && daysTo(i.dueDate) <= 7).length, 'amber'], ['Entro 30 giorni', pend.filter(i => i.dueDate && daysTo(i.dueDate) >= 0 && daysTo(i.dueDate) <= 30).length], ['Senza scadenza', pend.filter(i => !i.dueDate).length]] });
+    if (!groups.length) B.push({ type: 'note', text: 'Nessun argomento con scadenza corrisponde ai criteri alla data di emissione.' });
+    groups.forEach(g => { B.push({ type: 'heading', level: 3, text: g.label + (g.sub ? ' · ' + g.sub : ''), right: plural(g.items.length, 'argomento', 'argomenti') }); B.push({ type: 'table', spec: deadlineTableSpec(g.items, rd.mode) }); });
   } else if (rd.type === 'meeting') {
     const rooms = ROOMS.filter(r => rd.meetingRooms.includes(r.id));
     const roomList = rooms.length === ROOMS.length ? 'Tutti gli ambienti' : rooms.map(r => r.id).join(', ');
@@ -3251,6 +3359,7 @@ function openReportDialog(opts = {}) {
     elKey: UI.dec.element || '', elFloor: UI.dec.floor || '', elState: '',
     meetingRooms: opts.type === 'meeting' && opts.roomId ? [opts.roomId] : (withOpen.length ? withOpen : ROOMS.map(r => r.id)),
     meetElements: true, meetIssues: true, includeDefined: true, onlyBlocking: false,
+    dlRange: (UI.dl || {}).range || 'all', dlInclude: (UI.dl || {}).include || 'pending', dlOwner: (UI.dl || {}).owner || '', dlFloor: (UI.dl || {}).floor || '',
     meeting: { subject: tr('Riunione di coordinamento tecnico'), date: todayISO(), place: '', attendees: '' }, lang: LANG
   });
   RD.entry = openModal({ size: 'md', html: '<div id="rdBox"></div>' });
@@ -3263,16 +3372,20 @@ function readRD() {
 }
 function renderReportDialog() {
   const box = RD.entry.el.querySelector('#rdBox'); const model = buildReport(RD);
-  const types = [['matrix', 'Matrice'], ['room', 'Ambiente'], ['elements', 'Per elemento'], ['floor', 'Piano'], ['register', 'Argomenti'], ['meeting', 'Riunione'], ['complete', 'Completo']];
+  const types = [['matrix', 'Matrice'], ['room', 'Ambiente'], ['elements', 'Per elemento'], ['floor', 'Piano'], ['register', 'Argomenti'], ['deadlines', 'Scadenze'], ['meeting', 'Riunione'], ['complete', 'Completo']];
   const chk = (key, label) => `<label class="check"><input type="checkbox" data-rd="${key}" ${RD[key] ? 'checked' : ''}>${label}</label>`;
   const sel = (key, opts) => `<select data-rd-sel="${key}">${opts.map(([v, l]) => `<option value="${v}" ${RD[key] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   let o = '';
-  if (RD.type === 'matrix') o = `<div class="callout info">${ic('matrix')}<div>Tutti i 12 ambienti × 11 elementi su una pagina A3, con stato e specifiche sintetiche in ogni casella.</div></div>`;
+  if (RD.type === 'matrix') o = `<div class="callout info">${ic('matrix')}<div>Tutti gli ambienti × tutti gli ambiti su una pagina A3, con lo stato e i principali argomenti aperti in ogni casella.</div></div>`;
   if (RD.type === 'room') o = `<div class="field"><label>Ambiente</label>${sel('roomId', ROOMS.map(r => [r.id, r.id + ' · ' + r.name]))}</div><div class="checks" style="margin-top:10px">${chk('includeClosed', 'Includi argomenti chiusi')}${chk('includeImages', 'Includi planimetrie e foto')}</div>`;
   if (RD.type === 'elements') o = `<div class="fgrid"><div class="field"><label>Elemento</label>${sel('elKey', [['', 'Tutti gli elementi'], ...ELEMENTS.map(e => [e.key, e.name])])}</div><div class="field"><label>Piano</label>${sel('elFloor', [['', 'Tutti i piani'], ...FLOORS.map(f => [f.id, f.name])])}</div>
     <div class="field wide"><label>Contenuto</label>${sel('elState', [['', 'Tutti gli stati'], ['applicable', 'Escludi «Non previsto»'], ['open', 'Solo non ancora decisi'], ['decided', 'Solo decisi']])}</div></div>`;
   if (RD.type === 'floor') o = `<div class="field"><label>Piano</label>${sel('floorId', FLOORS.map(f => [f.id, f.name]))}</div><div class="checks" style="margin-top:10px">${chk('includeClosed', 'Includi argomenti chiusi')}${chk('includeImages', 'Includi planimetrie e foto')}</div>`;
   if (RD.type === 'register') o = `<div class="field"><span class="lbl">Contenuto</span><div class="checks">${[['all', 'Tutti'], ['open', 'Solo non chiusi'], ['blocking', 'Solo bloccanti'], ['filters', 'Filtri del registro']].map(([k, l]) => `<label class="check"><input type="radio" name="rd_scope" value="${k}" ${RD.scope === k ? 'checked' : ''}>${l}</label>`).join('')}</div>${RD.scope === 'filters' ? `<div class="help">Filtri: ${esc(filtersDescription(UI.filters))}</div>` : ''}</div>`;
+  if (RD.type === 'deadlines') { const owners = [...new Set(db.issues.filter(i => i.dueDate).map(i => i.answerOwner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+    o = `<div class="fgrid"><div class="field"><label>Periodo</label>${sel('dlRange', DL_RANGES)}</div><div class="field"><label>Argomenti</label>${sel('dlInclude', DL_INCLUDE)}</div>
+      <div class="field"><label>Chi decide</label>${sel('dlOwner', [['', 'Tutti'], ...owners.map(x => [x, x])])}</div><div class="field"><label>Piano</label>${sel('dlFloor', [['', 'Tutti i piani'], ...FLOORS.map(f => [f.id, f.name])])}</div></div>
+      <div class="help" style="margin-top:8px">Utile da inviare a ciascun responsabile: scegli «Chi decide» per un elenco solo con le sue scadenze.</div>`; }
   if (RD.type === 'meeting') o = `<div class="fgrid"><div class="field wide"><label for="rd_subject">Oggetto</label><input id="rd_subject" value="${esc(RD.meeting.subject)}"></div>
       <div class="field"><label for="rd_date">Data</label><input id="rd_date" type="date" value="${esc(RD.meeting.date)}"></div><div class="field"><label for="rd_place">Luogo</label><input id="rd_place" value="${esc(RD.meeting.place)}" placeholder="Es. cantiere, sala riunioni"></div>
       <div class="field wide"><label for="rd_att">Partecipanti</label><textarea id="rd_att" rows="2" placeholder="Lasciare vuoto per compilare a mano">${esc(RD.meeting.attendees)}</textarea></div></div>
@@ -3606,6 +3719,15 @@ const EN_NOUNS = {
 };
 const T = (s) => trCore(s);
 const RULES = [
+  [/^([A-Z0-9]{1,3}-\d{2}-\d{3}) aggiunto\.$/, (m, a) => `${a} added.`],
+  [/^tra (\d+) giorni$/, (m, a) => `in ${a} days`],
+  [/^(\d+) giorni fa$/, (m, a) => `${a} days ago`],
+  [/^(lun|mar|mer|gio|ven|sab|dom) (\d{2}\/\d{2}\/\d{4})$/, (m, a, b) => `${{ lun: 'Mon', mar: 'Tue', mer: 'Wed', gio: 'Thu', ven: 'Fri', sab: 'Sat', dom: 'Sun' }[a]} ${b}`],
+  [/^Settimana dal (.+)$/, (m, a) => `Week of ${a}`],
+  [/^SCADUTO · (.+)$/, (m, a) => `OVERDUE · ${trCore(a)}`],
+  [/^Elimina ([A-Z0-9]{1,3}-\d{2}-\d{3})$/, (m, a) => `Delete ${a}`],
+  [/^Segna ([A-Z0-9]{1,3}-\d{2}-\d{3}) come risolto$/, (m, a) => `Mark ${a} as resolved`],
+  [/^Ci sono (\d+) (argomento aperto|argomenti aperti) senza data: aprili e indica una scadenza\.$/, (m, a) => `There are ${a} open topics without a date: open them and set a deadline.`],
   [/^(.+) risolto e chiuso\.$/, (m, a) => `${a} resolved and closed.`],
   [/^(.+) eliminato\.$/, (m, a) => `${a} deleted.`],
   [/^(\d+) (argomento eliminato|argomenti eliminati)\.$/, (m, a) => `${a} ${+a === 1 ? 'topic' : 'topics'} deleted.`],
@@ -3775,6 +3897,18 @@ Object.assign(EN, {
 Object.assign(EN, {
   'Segna come risolto (chiuso)': 'Mark as resolved (closed)', 'Elimina (va nel cestino, si può ripristinare)': 'Delete (goes to the bin, can be restored)', 'Elimina tutti i chiusi': 'Delete all closed', 'Elimina argomento': 'Delete topic',
   'Vanno nel cestino (Dati e backup) e si possono ripristinare.': 'They go to the bin (Data & backup) and can be restored.'
+});
+Object.assign(EN, {
+  'Stato del nuovo argomento': 'Status of the new topic', 'Stato': 'Status', 'Scadenza (facoltativa)': 'Deadline (optional)', 'Scadenza': 'Deadline',
+  'Scadenze': 'Deadlines', 'Calendario decisioni': 'Decision calendar', 'Gli argomenti con una data di scadenza, in ordine di data e raggruppati per settimana. Clic su una riga per aprirla.': 'Topics with a deadline, in date order and grouped by week. Click a row to open it.',
+  'PDF scadenze': 'Deadlines PDF', 'Scaduti': 'Overdue', 'Entro 7 giorni': 'Within 7 days', 'Entro 30 giorni': 'Within 30 days', 'Senza scadenza': 'No deadline', 'argomenti aperti senza data': 'open topics without a date',
+  'Periodo': 'Period', 'Chi decide': 'Decision owner', 'Tutte le date': 'All dates', 'Solo scadute': 'Overdue only', 'Scadute ed entro 7 giorni': 'Overdue and within 7 days', 'Scadute ed entro 30 giorni': 'Overdue and within 30 days',
+  'Solo da definire (aperti e in verifica)': 'Only to be defined (open and under review)', 'Anche i definiti non chiusi': 'Also agreed, not closed', 'Tutti, anche chiusi': 'All, including closed',
+  'Questa settimana': 'This week', 'Prossima settimana': 'Next week', 'Settimane passate': 'Past weeks', 'oggi': 'today', 'domani': 'tomorrow', 'ieri': 'yesterday',
+  'Nessuna scadenza con questi filtri': 'No deadlines with these filters', 'Scadenze degli argomenti': 'Topic deadlines', 'Lavorazione bloccata': 'Blocked work', 'Argomenti generali': 'General topics',
+  'Utile da inviare a ciascun responsabile: scegli «Chi decide» per un elenco solo con le sue scadenze.': 'Useful to send to each owner: choose “Decision owner” for a list with only their deadlines.',
+  'lun': 'Mon', 'mar': 'Tue', 'mer': 'Wed', 'gio': 'Thu', 'ven': 'Fri', 'sab': 'Sat', 'dom': 'Sun',
+  'Tutti gli ambienti × tutti gli ambiti su una pagina A3, con lo stato e i principali argomenti aperti in ogni casella.': 'All rooms × all scopes on one A3 page, with the status and the main open topics in each cell.'
 });
 const EN_LC = new Map(Object.entries(EN).map(([k, v]) => [k.trim().toLowerCase(), v]));
 const _trCache = new Map();
