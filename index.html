@@ -568,6 +568,18 @@ body.auth-on #authRoot{display:block}
 .chip-btn:hover{background:rgba(255,255,255,.2);color:#fff}
 .chip-btn .svg{width:12px;height:12px}
 .card-head .btn{margin-left:12px}
+/* azioni rapide sugli argomenti (4.4) */
+.ptrow{grid-template-columns:14px 78px minmax(0,1fr) auto auto}
+.ptrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.pt-acts{display:flex;gap:4px;align-items:flex-start}
+.pt-act{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;padding:0}
+.pt-act .svg{width:15px;height:15px}
+.pt-act.ok:hover{color:#1d8657;border-color:#9fd8bd;background:#e8f6ee}
+.pt-act.del:hover{color:var(--blk);border-color:#f0b9b2;background:#fde7e4}
+.role-external .ptrow{grid-template-columns:14px 78px minmax(0,1fr) auto}
+.danger-text{color:var(--blk)!important}
+.danger-text:hover{background:#fde7e4!important}
+@media (max-width:720px){.ptrow{grid-template-columns:14px minmax(0,1fr) auto}.ptrow .right{grid-column:2}.pt-acts{grid-column:3;grid-row:1}}
 
 </style>
 </head>
@@ -1036,7 +1048,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    EDILETICA – Room Coordination Manager · v3.0
    Core: configurazione, catalogo elementi, utilità, persistenza, modello
    ===================================================================== */
-const APP_VERSION = '4.3';
+const APP_VERSION = '4.4';
 const SCHEMA = 3;
 
 const PROJECT = {
@@ -1666,7 +1678,7 @@ function toast(msg, type = 'info', opts = {}) {
   const el = document.createElement('div'); el.className = 'toast ' + type;
   el.innerHTML = ic(type === 'success' ? 'check' : type === 'error' ? 'alert' : 'info') + `<div>${esc(msg)}</div>` + (opts.actionLabel ? `<button>${esc(opts.actionLabel)}</button>` : '');
   if (opts.actionLabel) el.querySelector('button').onclick = () => { opts.onAction(); el.remove(); };
-  $('#toasts').appendChild(el); setTimeout(() => el.remove(), opts.ms || (type === 'error' ? 9000 : 4500));
+  const box = $('#toasts'); box.appendChild(el); while (box.children.length > 4) box.firstElementChild.remove(); setTimeout(() => el.remove(), opts.ms || (type === 'error' ? 9000 : 4500));
 }
 const Overlay = { stack: [] };
 function openModal({ html, size = '', onRequestClose, drawer = false, wide = false }) {
@@ -1759,7 +1771,7 @@ function pointsMini(roomId, key, max = 3) {
   return `<div class="pts">${list.slice(0, max).map(i => `<div class="pt pt-${ptDot(i)}"><i></i><span>${esc(i.title)}</span></div>`).join('')}${list.length > max ? `<div class="pt more">+ ${list.length - max} altri argomenti</div>` : ''}</div>`;
 }
 function quickAdd(roomId, element) {
-  const ph = element === 'generale' ? 'Nuovo argomento, es. «Accesso mezzi dal cortile»' : 'Nuovo punto, es. «Parete nord: finitura» o «Quadro elettrico: posizione»';
+  const ph = element === 'generale' ? 'Nuovo argomento, es. «Accesso mezzi dal cortile»' : 'Nuovo argomento, es. «Parete nord: finitura» o «Quadro elettrico: posizione»';
   return `<div class="qadd staff-only" data-room="${roomId}" data-el="${element}">
     <input class="qa-title" maxlength="140" placeholder="${esc(ph)}" aria-label="Titolo del nuovo punto">
     <label class="qa-blk"><input type="checkbox" class="qa-b">Bloccante</label>
@@ -1767,10 +1779,11 @@ function quickAdd(roomId, element) {
     <button type="button" class="btn btn-sm btn-primary" data-action="quick-issue">${ic('plus')}Aggiungi</button></div>`;
 }
 function pointRows(list, attr = 'data-action="open-issue"') {
-  return list.map(i => `<button type="button" class="ptrow ${isBlocking(i) ? 'is-block' : ''}" ${attr} data-id="${esc(i.id)}" data-hl="${esc(i.id)}">
+  return list.map(i => `<div role="button" tabindex="0" class="ptrow ${isBlocking(i) ? 'is-block' : ''}" ${attr} data-id="${esc(i.id)}" data-hl="${esc(i.id)}">
     <span class="dot pt-${ptDot(i)}"><i></i></span><span class="code">${esc(i.id)}</span>
     <span class="tx"><b>${esc(i.title)}</b>${i.agreedDecision ? `<span class="dec">${ic('check')}${esc(i.agreedDecision)}</span>` : ''}<span class="meta">${esc(i.answerOwner || 'Da assegnare')}${i.dueDate ? ` · <span class="${isOverdue(i) ? 'overdue' : ''}">${fmtDate(i.dueDate)}</span>` : ''}${isBlocking(i) && i.affectedWork ? ` · blocca ${esc(i.affectedWork)}` : ''}</span></span>
-    <span class="right">${statusChip(i.status)}${isBlocking(i) ? blockFlag() : ''}</span></button>`).join('');
+    <span class="right">${statusChip(i.status)}${isBlocking(i) ? blockFlag() : ''}</span>
+    <span class="pt-acts staff-only">${isPending(i) ? `<button type="button" class="pt-act ok" data-action="quick-resolve" data-id="${esc(i.id)}" title="Segna come risolto (chiuso)" aria-label="Segna ${esc(i.id)} come risolto">${ic('check')}</button>` : ''}<button type="button" class="pt-act del" data-action="quick-delete" data-id="${esc(i.id)}" title="Elimina (va nel cestino, si può ripristinare)" aria-label="Elimina ${esc(i.id)}">${ic('trash')}</button></span></div>`).join('');
 }
 function genSection(roomId) {
   const all = sortIssues(db.issues.filter(i => i.roomId === roomId && i.element === 'generale'));
@@ -1780,7 +1793,7 @@ function genSection(roomId) {
       <div class="gen-help">Temi dell’ambiente che non ricadono in un elemento: accessi, vincoli di cantiere, permessi, interferenze, sequenze di lavoro… Ognuno ha stato, responsabile, scadenza e decisione propri.</div>
       ${open.length ? `<div class="ptlist">${pointRows(open)}</div>` : ''}
       ${quickAdd(roomId, 'generale')}
-      ${closed ? `<div class="reg-foot"><span>${plural(closed, 'argomento chiuso', 'argomenti chiusi')}</span><a href="#" data-action="room-closed" data-room="${roomId}">Vedi nel registro</a></div>` : ''}
+      ${closed ? `<details class="pt-closed"><summary>${plural(closed, 'argomento chiuso', 'argomenti chiusi')}</summary><div class="ptlist">${pointRows(all.filter(isClosed))}</div><button type="button" class="btn btn-sm btn-ghost staff-only" data-action="purge-closed" data-room="${roomId}" data-el="generale" style="margin-top:8px">${ic('trash')}Elimina tutti i chiusi</button></details>` : ''}
     </section>`;
 }
 function dueHtml(d, overdue, soon) {
@@ -2250,11 +2263,12 @@ function refreshEditorSide() {
     <button type="button" class="btn btn-sm glass staff-only" data-action="toggle-na">${e.status === 'Non previsto' ? ic('check') + 'Previsto in questo ambiente' : ic('minus') + 'Non previsto qui'}</button>`;
   const cbox = el.querySelector('#edComments'); if (cbox && !cbox.contains(document.activeElement)) cbox.innerHTML = commentsBlock({ roomId, element: key });
   const box = el.querySelector('#edIssues'), keep = box.querySelector('.qa-title'), typed = keep && document.activeElement === keep ? keep.value : null;
+  const dt = box.querySelector('details.pt-closed'); if (dt) Ed.showClosed = dt.open;
   const act = isStaff() ? 'data-action="edit-point"' : 'data-action="view-point"';
   box.innerHTML = (e.status === 'Non previsto' ? `<div class="callout" style="margin-bottom:10px">${ic('minus')}<div>Questo ambito è segnato come <b>non previsto</b> in questo ambiente e non conta nell’avanzamento.</div></div>` : '')
     + (open.length ? `<div class="ptlist">${pointRows(open, act)}</div>` : (isStaff() ? '' : '<div class="muted" style="font-size:12.5px">Nessun argomento aperto.</div>'))
     + quickAdd(roomId, key)
-    + (closed.length ? `<details class="pt-closed"><summary>${plural(closed.length, 'argomento chiuso', 'argomenti chiusi')}</summary><div class="ptlist">${pointRows(closed, act)}</div></details>` : '')
+    + (closed.length ? `<details class="pt-closed" ${Ed.showClosed ? 'open' : ''}><summary>${plural(closed.length, 'argomento chiuso', 'argomenti chiusi')}</summary><div class="ptlist">${pointRows(closed, act)}</div><button type="button" class="btn btn-sm btn-ghost staff-only" data-action="purge-closed" data-room="${roomId}" data-el="${key}" style="margin-top:8px">${ic('trash')}Elimina tutti i chiusi</button></details>` : '')
     + `<button type="button" class="btn btn-sm btn-ghost staff-only" data-e="newq" style="margin-top:6px">${ic('edit')}Nuovo argomento con tutti i dettagli</button>`;
   if (typed != null) { const t = box.querySelector('.qa-title'); t.value = typed; t.focus(); }
   el.querySelector('[data-e=newq]').onclick = () => openIssueForm({ roomId, element: key });
@@ -2325,7 +2339,7 @@ function openIssueForm({ id = null, roomId = null, element = null } = {}) {
       <div class="field wide"><label for="f_int">Note interne</label><textarea id="f_int" rows="2" placeholder="Costi, margini, riserve, responsabilità, strategia">${esc(v.internalNotes)}</textarea></div>
     </div></div>
   </form>
-  <div class="modal-foot"><span class="hint">Ctrl/⌘ + Invio per salvare · * obbligatorio</span><div class="actions"><button class="btn" data-f="cancel">Annulla</button><button class="btn btn-primary" data-f="save" id="saveIssueBtn">${ic('check')}Salva argomento</button></div></div>`;
+  <div class="modal-foot">${x ? `<button type="button" class="btn btn-ghost danger-text" data-f="delete">${ic('trash')}Elimina argomento</button>` : '<span class="hint">Ctrl/⌘ + Invio per salvare · * obbligatorio</span>'}<div class="actions"><button class="btn" data-f="cancel">Annulla</button><button class="btn btn-primary" data-f="save" id="saveIssueBtn">${ic('check')}Salva argomento</button></div></div>`;
   Form.entry = openModal({ html, onRequestClose: closeIssueForm });
   const el = Form.entry.el, form = el.querySelector('#issueForm');
   form.addEventListener('input', ev => { Form.dirty = true; ev.target.closest('.field')?.classList.remove('invalid'); });
@@ -2345,6 +2359,8 @@ function openIssueForm({ id = null, roomId = null, element = null } = {}) {
   el.querySelector('[data-f=save]').onclick = () => submitIssueForm();
   el.querySelector('[data-f=cancel]').onclick = closeIssueForm;
   el.querySelector('[data-f=close]').onclick = closeIssueForm;
+  const delBtn = el.querySelector('[data-f=delete]');
+  if (delBtn) delBtn.onclick = async () => { const id = x.id; if (await deleteIssue(id)) { Form.dirty = false; if (Form.entry) { Form.entry.close(); Form.entry = null; } refreshEditorSide(); } };
   el.addEventListener('keydown', ev => { if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); submitIssueForm(); } });
 }
 async function closeIssueForm() {
@@ -2448,6 +2464,7 @@ document.addEventListener('change', ev => {
   if (b.checked) box.querySelector('.qa-work').focus();
 });
 document.addEventListener('keydown', ev => {
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('ptrow')) { ev.preventDefault(); ev.target.click(); return; }
   const t = ev.target; if (ev.key !== 'Enter' || !t.closest || !t.closest('.qadd') || t.type === 'checkbox') return;
   ev.preventDefault(); ev.stopPropagation(); quickAddIssue(t.closest('.qadd'));
 }, true);
@@ -2482,17 +2499,33 @@ function openIssueDrawer(id) {
   const br = el.querySelector('[data-d=room]'); if (br) br.onclick = () => { entry.close(); UI.highlight = id; go('ambiente-' + i.roomId); };
   el.querySelector('[data-d=del]').onclick = async () => { if (await deleteIssue(id)) entry.close(); };
 }
-async function deleteIssue(id) {
+async function deleteIssue(id, { ask = true } = {}) {
   const i = db.issues.find(x => x.id === id); if (!i) return false;
-  if (!(await confirmDialog({ title: `Eliminare ${id}?`, message: `«${esc(i.title)}»\n\nL’argomento va nel cestino (Dati e backup) e può essere ripristinata. Il codice ${esc(id)} non verrà riutilizzato.`, confirm: 'Elimina', danger: true }))) return false;
+  if (ask && !(await confirmDialog({ title: `Eliminare ${id}?`, message: `«${esc(i.title)}»\n\nL’argomento va nel cestino (Dati e backup) e si può ripristinare. Il codice ${esc(id)} non verrà riutilizzato.`, confirm: 'Elimina', danger: true }))) return false;
   try {
-    await commit(d => { const idx = d.issues.findIndex(x => x.id === id); if (idx < 0) throw new Error('già eliminato'); const [rem] = d.issues.splice(idx, 1); d.deleted.push({ ...rem, deletedAt: nowISO(), deletedBy: Prefs.data.operator || '' }); addLog(d, { roomId: rem.roomId, issueId: id, element: rem.element, action: `Eliminata ${id} · ${rem.title}`, details: ['spostata nel cestino'] }); });
-    render(); refreshEditorSide(); toast(`${id} spostata nel cestino.`, 'success', { actionLabel: 'Annulla eliminazione', onAction: () => restoreIssue(id) }); return true;
+    await commit(d => { const idx = d.issues.findIndex(x => x.id === id); if (idx < 0) throw new Error('già eliminato'); const [rem] = d.issues.splice(idx, 1); d.deleted.push({ ...rem, deletedAt: nowISO(), deletedBy: Prefs.data.operator || '' }); addLog(d, { roomId: rem.roomId, issueId: id, element: rem.element, action: `Eliminato ${id} · ${rem.title}`, details: ['spostato nel cestino'] }); });
+    render(); refreshEditorSide(); toast(`${id} eliminato.`, 'success', { actionLabel: 'Annulla', onAction: () => restoreIssue(id) }); return true;
   } catch (e) { toast('Eliminazione non riuscita: ' + e.message, 'error'); return false; }
+}
+async function purgeClosed(roomId, element) {
+  const list = db.issues.filter(i => i.roomId === roomId && i.element === element && isClosed(i)); if (!list.length) return;
+  if (!(await confirmDialog({ title: `Eliminare ${plural(list.length, 'argomento chiuso', 'argomenti chiusi')}?`, message: `Vanno nel cestino (Dati e backup) e si possono ripristinare.`, confirm: 'Elimina', danger: true }))) return;
+  const ids = new Set(list.map(i => i.id));
+  try {
+    await commit(d => { const now = nowISO(), who = Prefs.data.operator || ''; d.issues.filter(i => ids.has(i.id)).forEach(rem => { d.deleted.push({ ...rem, deletedAt: now, deletedBy: who }); addLog(d, { roomId, issueId: rem.id, element, action: `Eliminato ${rem.id} · ${rem.title}`, details: ['spostato nel cestino'] }); }); d.issues = d.issues.filter(i => !ids.has(i.id)); });
+    render(); refreshEditorSide(); toast(`${plural(ids.size, 'argomento eliminato', 'argomenti eliminati')}.`, 'success');
+  } catch (e) { toast('Eliminazione non riuscita: ' + e.message, 'error'); }
+}
+async function quickResolve(id) {
+  const i = db.issues.find(x => x.id === id); if (!i) return; const prev = i.status;
+  try {
+    await commit(d => { const x = d.issues.find(y => y.id === id); x.status = 'Chiuso'; x.updatedAt = nowISO(); x.updatedBy = Prefs.data.operator || ''; addLog(d, { roomId: x.roomId, issueId: id, element: x.element, action: `Risolto ${id} · ${x.title}`, details: [`Stato: ${prev} → Chiuso`] }); });
+    render(); refreshEditorSide(); toast(`${id} risolto e chiuso.`, 'success', { actionLabel: 'Annulla', onAction: async () => { await commit(d => { const x = d.issues.find(y => y.id === id); if (x) x.status = prev; }); render(); refreshEditorSide(); } });
+  } catch (e) { toast('Modifica non salvata: ' + e.message, 'error'); }
 }
 async function restoreIssue(id) {
   try {
-    await commit(d => { const idx = d.deleted.findIndex(x => x.id === id); if (idx < 0) throw new Error('non presente nel cestino'); const [rem] = d.deleted.splice(idx, 1); delete rem.deletedAt; delete rem.deletedBy; d.issues.push(normalizeIssue(rem)); addLog(d, { roomId: rem.roomId, issueId: id, element: rem.element, action: `Ripristinata ${id} · ${rem.title}` }); });
+    await commit(d => { const idx = d.deleted.findIndex(x => x.id === id); if (idx < 0) throw new Error('non presente nel cestino'); const [rem] = d.deleted.splice(idx, 1); delete rem.deletedAt; delete rem.deletedBy; d.issues.push(normalizeIssue(rem)); addLog(d, { roomId: rem.roomId, issueId: id, element: rem.element, action: `Ripristinato ${id} · ${rem.title}` }); });
     render(); toast(`${id} ripristinato.`, 'success');
   } catch (e) { toast('Ripristino non riuscito: ' + e.message, 'error'); }
 }
@@ -2619,6 +2652,9 @@ const ACTIONS = {
   'edit-point': el => openIssueForm({ id: el.dataset.id }),
   'view-point': el => openIssueDrawer(el.dataset.id),
   'toggle-na': () => toggleNotPlanned(),
+  'quick-delete': el => deleteIssue(el.dataset.id, { ask: false }),
+  'quick-resolve': el => quickResolve(el.dataset.id),
+  'purge-closed': el => purgeClosed(el.dataset.room, el.dataset.el),
   'room-closed': el => { UI.filters = { ...defaultFilters(), room: el.dataset.room, status: 'Chiuso' }; setFilters({}); go('argomenti'); },
   'kpi': el => {
     const k = el.dataset.k;
@@ -2667,7 +2703,7 @@ function bindEvents() {
     if (!e.target.closest('.search')) $('#searchResults').classList.remove('show');
     const el = e.target.closest('[data-action]'); if (!el) return;
     const act = el.dataset.action;
-    if (!isStaff() && ['new-issue', 'edit-issue', 'delete-issue', 'restore-issue', 'save-notes', 'img-cover', 'img-caption', 'img-delete', 'export-json', 'import-json', 'export-csv', 'export-el-csv', 'toggle-na', 'edit-point', 'quick-issue', 'room-new', 'room-rename', 'room-delete'].includes(act)) return;
+    if (!isStaff() && ['new-issue', 'edit-issue', 'delete-issue', 'restore-issue', 'save-notes', 'img-cover', 'img-caption', 'img-delete', 'export-json', 'import-json', 'export-csv', 'export-el-csv', 'toggle-na', 'edit-point', 'quick-issue', 'room-new', 'room-rename', 'room-delete', 'quick-delete', 'quick-resolve', 'purge-closed'].includes(act)) return;
     const fn = ACTIONS[act] || ONLINE_ACTIONS[act]; if (!fn) return;
     if (el.tagName === 'A') e.preventDefault();
     fn(el, e);
@@ -3525,6 +3561,10 @@ const EN_NOUNS = {
 };
 const T = (s) => trCore(s);
 const RULES = [
+  [/^(.+) risolto e chiuso\.$/, (m, a) => `${a} resolved and closed.`],
+  [/^(.+) eliminato\.$/, (m, a) => `${a} deleted.`],
+  [/^(\d+) (argomento eliminato|argomenti eliminati)\.$/, (m, a) => `${a} ${+a === 1 ? 'topic' : 'topics'} deleted.`],
+  [/^Eliminare (\d+) (argomento chiuso|argomenti chiusi)\?$/, (m, a) => `Delete ${a} closed ${+a === 1 ? 'topic' : 'topics'}?`],
   [/^(\d+) di (\d+) ambiti decisi$/, (m, a, b) => `${a} of ${b} scopes decided`],
   [/^(\d+) (cassetto bloccato|cassetti bloccati)$/, (m, a) => `${a} blocked ${+a === 1 ? 'drawer' : 'drawers'}`],
   [/^(\d+) (argomento|argomenti)$/, (m, a) => `${a} ${+a === 1 ? 'topic' : 'topics'}`],
@@ -3654,7 +3694,7 @@ Object.assign(EN, {
   'Argomenti generali': 'General topics', 'Generali': 'General', 'Argomenti generali di ogni ambiente': 'General topics of every room',
   'Temi dell’ambiente che non ricadono in un elemento: accessi, vincoli di cantiere, permessi, interferenze, sequenze di lavoro… Ognuno ha stato, responsabile, scadenza e decisione propri.': 'Room topics that do not belong to a single element: access, site constraints, permits, interferences, work sequences… Each one has its own status, owner, deadline and decision.',
   'Nuovo argomento, es. «Accesso mezzi dal cortile»': 'New topic, e.g. “Vehicle access from the courtyard”',
-  'Nuovo punto, es. «Parete nord: finitura» o «Quadro elettrico: posizione»': 'New point, e.g. “North wall: finish” or “Electrical panel: position”',
+  'Nuovo argomento, es. «Parete nord: finitura» o «Quadro elettrico: posizione»': 'New topic, e.g. “North wall: finish” or “Electrical panel: position”',
   'Titolo del nuovo punto': 'Title of the new point', 'Bloccante': 'Blocking', 'Quale lavorazione blocca?': 'Which work does it block?', 'Lavorazione bloccata': 'Blocked work', 'Aggiungi': 'Add',
   'Punti da decidere in questo elemento': 'Points to decide in this element',
   'Quando nello stesso elemento ci sono scelte distinte (es. pareti con finiture diverse) o più punti bloccanti, aggiungi un punto per ciascuno: ognuno ha stato, responsabile, scadenza e decisione propri. L’elemento resta «in definizione» finché ci sono punti aperti.': 'When the same element involves separate choices (e.g. walls with different finishes) or several blocking points, add one point for each: every point has its own status, owner, deadline and decision. The element stays “in progress” while points are open.',
@@ -3686,6 +3726,10 @@ Object.assign(EN, {
   'Dettagli · cosa serve per procedere': 'Details · what is needed to proceed', 'Facoltativo. Descrivi liberamente l’argomento, cosa manca o cosa serve per decidere.': 'Optional. Describe the topic freely, what is missing or what is needed to decide.',
   'Es. Parete nord: finitura, oppure Quota macchina UTA': 'E.g. North wall: finish, or AHU unit height', 'Inserisci il titolo dell’argomento.': 'Enter the topic title.',
   'Argomento non trovato: potrebbe essere stato eliminato.': 'Topic not found: it may have been deleted.', 'cassetti': 'drawers', 'ambiti decisi': 'scopes decided'
+});
+Object.assign(EN, {
+  'Segna come risolto (chiuso)': 'Mark as resolved (closed)', 'Elimina (va nel cestino, si può ripristinare)': 'Delete (goes to the bin, can be restored)', 'Elimina tutti i chiusi': 'Delete all closed', 'Elimina argomento': 'Delete topic',
+  'Vanno nel cestino (Dati e backup) e si possono ripristinare.': 'They go to the bin (Data & backup) and can be restored.'
 });
 const EN_LC = new Map(Object.entries(EN).map(([k, v]) => [k.trim().toLowerCase(), v]));
 const _trCache = new Map();
