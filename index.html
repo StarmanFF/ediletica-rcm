@@ -554,13 +554,12 @@ body.auth-on #authRoot{display:block}
 .drawer-help{margin:-4px 0 10px;font-size:12px;color:var(--muted);line-height:1.5}
 
 /* ---------- Intestazioni fisse durante lo scorrimento (4.3) ---------- */
-.matrix-wrap{overflow:auto;max-height:calc(100vh - var(--topbar-h,66px) - 28px);overscroll-behavior:auto}
+.matrix-wrap{overflow-x:auto;overflow-y:hidden}
 .matrix thead th{position:sticky;top:0;z-index:4;background:var(--surface);box-shadow:0 1px 0 var(--line)}
 .matrix tbody th.mx-room,.matrix tfoot td:first-child{position:sticky;left:0;z-index:3;background:var(--surface)}
 .matrix thead th.mx-room{left:0;z-index:5}
-.matrix tfoot td{position:sticky;bottom:0;z-index:4;background:var(--surface);box-shadow:0 -1px 0 var(--line)}
 .matrix tfoot td:first-child{z-index:5}
-.tablewrap{max-height:calc(100vh - var(--topbar-h,66px) - 28px);overflow:auto}
+
 .side-add{display:flex;align-items:center;gap:8px;width:calc(100% - 4px);margin:10px 2px 4px;padding:8px 12px;border:1px dashed rgba(255,255,255,.22);border-radius:9px;background:none;color:#b4c6d5;font-size:12.5px;font-weight:600;text-align:left}
 .side-add:hover{background:rgba(255,255,255,.06);color:#fff}
 .side-add .svg{width:15px;height:15px}
@@ -580,6 +579,13 @@ body.auth-on #authRoot{display:block}
 .danger-text{color:var(--blk)!important}
 .danger-text:hover{background:#fde7e4!important}
 @media (max-width:720px){.ptrow{grid-template-columns:14px minmax(0,1fr) auto}.ptrow .right{grid-column:2}.pt-acts{grid-column:3;grid-row:1}}
+
+/* intestazione «galleggiante»: resta in alto mentre la pagina scorre (4.5) */
+.float-head{position:fixed;z-index:25;overflow:hidden;display:none;background:var(--surface);box-shadow:0 6px 14px -8px rgba(10,30,50,.28);border-bottom:1px solid var(--line);pointer-events:auto}
+.float-head table{margin:0;table-layout:fixed;border-collapse:separate}
+.float-head table.reg th{position:static}
+.float-head .matrix thead th{position:static;box-shadow:none}
+.float-head .matrix thead th.mx-room{position:sticky;left:0}
 
 </style>
 </head>
@@ -1048,7 +1054,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    EDILETICA – Room Coordination Manager · v3.0
    Core: configurazione, catalogo elementi, utilità, persistenza, modello
    ===================================================================== */
-const APP_VERSION = '4.4';
+const APP_VERSION = '4.5';
 const SCHEMA = 3;
 
 const PROJECT = {
@@ -1680,6 +1686,45 @@ function toast(msg, type = 'info', opts = {}) {
   if (opts.actionLabel) el.querySelector('button').onclick = () => { opts.onAction(); el.remove(); };
   const box = $('#toasts'); box.appendChild(el); while (box.children.length > 4) box.firstElementChild.remove(); setTimeout(() => el.remove(), opts.ms || (type === 'error' ? 9000 : 4500));
 }
+/* Intestazioni delle tabelle sempre visibili scorrendo la pagina (matrice, registro, vista per ambito) */
+const StickyHead = {
+  items: [], raf: 0,
+  refresh() {
+    this.items.forEach(x => x.float.remove()); this.items = [];
+    document.querySelectorAll('#view table.matrix, #view table.reg').forEach(t => {
+      if (!t.tHead || !t.tHead.rows.length) return;
+      const wrap = t.closest('.matrix-wrap, .tablewrap') || t.parentElement;
+      const float = document.createElement('div'); float.className = 'float-head';
+      const inner = document.createElement('table'); inner.className = t.className; inner.appendChild(t.tHead.cloneNode(true));
+      inner.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+      float.appendChild(inner); document.body.appendChild(float);
+      this.items.push({ t, wrap, float, inner });
+    });
+    this.update();
+  },
+  schedule() { if (!this.raf) this.raf = requestAnimationFrame(() => { this.raf = 0; this.update(); }); },
+  update() {
+    const tb = document.querySelector('.topbar'), top = tb ? Math.max(0, tb.getBoundingClientRect().bottom) : 0;
+    const modal = Overlay.stack.length > 0;
+    this.items.forEach(x => {
+      if (!x.t.isConnected) { x.float.style.display = 'none'; return; }
+      const r = x.t.getBoundingClientRect(), hh = x.t.tHead.getBoundingClientRect().height, w = x.wrap.getBoundingClientRect();
+      const show = !modal && r.top < top && r.bottom - hh * 1.5 > top && w.width > 0;
+      x.float.style.display = show ? 'block' : 'none'; if (!show) return;
+      Object.assign(x.float.style, { top: top + 'px', left: w.left + 'px', width: w.width + 'px' });
+      x.inner.style.width = r.width + 'px'; x.inner.style.marginLeft = (r.left - w.left + x.wrap.scrollLeft) + 'px';
+      const src = x.t.tHead.rows[0].cells, dst = x.inner.tHead.rows[0].cells;
+      for (let i = 0; i < src.length && i < dst.length; i++) { const cw = src[i].getBoundingClientRect().width + 'px'; dst[i].style.width = cw; dst[i].style.minWidth = cw; dst[i].style.maxWidth = cw; }
+      x.float.scrollLeft = x.wrap.scrollLeft;
+    });
+  }
+};
+window.addEventListener('scroll', () => StickyHead.schedule(), { passive: true, capture: true });
+window.addEventListener('resize', () => StickyHead.schedule());
+document.addEventListener('DOMContentLoaded', () => {
+  const v = document.getElementById('view'); if (!v) return;
+  let t = 0; new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => StickyHead.refresh(), 40); }).observe(v, { childList: true, subtree: true });
+});
 const Overlay = { stack: [] };
 function openModal({ html, size = '', onRequestClose, drawer = false, wide = false }) {
   const wrap = document.createElement('div');
