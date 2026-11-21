@@ -1069,7 +1069,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    EDILETICA – Room Coordination Manager · v3.0
    Core: configurazione, catalogo elementi, utilità, persistenza, modello
    ===================================================================== */
-const APP_VERSION = '4.7';
+const APP_VERSION = '4.8';
 const SCHEMA = 3;
 
 const PROJECT = {
@@ -1910,7 +1910,7 @@ function openElementsList(filterFn) { return allElementCells().filter(c => filte
 function render() {
   if (!PROFILE) return;
   UI.route = parseHash();
-  if ((UI.route.view === 'users' && !isAdmin()) || (UI.route.view === 'data' && !isStaff())) { history.replaceState(null, '', location.pathname + location.search); UI.route = { view: 'dashboard' }; }
+  if ((UI.route.view === 'users' && !isAdmin()) || (UI.route.view === 'data' && !isAdmin())) { history.replaceState(null, '', location.pathname + location.search); UI.route = { view: 'dashboard' }; }
   renderChrome();
   const v = $('#view'), r = UI.route;
   if (r.view === 'room') v.innerHTML = viewRoom(r.id);
@@ -1932,9 +1932,8 @@ function renderChrome() {
   const r = UI.route;
   const openQ = db.issues.filter(isOpen).length;
   const pp = projectProgress();
-  const nav = [['dashboard', '', 'grid', 'Panoramica'], ['decisions', 'decisioni', 'compare', 'Decisioni per elemento'], ['register', 'argomenti', 'question', 'Argomenti aperti', openQ], ['deadlines', 'scadenze', 'calendar', 'Scadenze', db.issues.filter(isOverdue).length || null], ['reports', 'report', 'printer', 'Report e stampe']];
-  if (isStaff()) nav.push(['data', 'dati', 'db', 'Dati e backup']);
-  if (isAdmin()) nav.push(['users', 'utenti', 'users', 'Utenti']);
+  const nav = [['dashboard', '', 'grid', 'Panoramica'], ['decisions', 'decisioni', 'compare', 'Decisioni per elemento'], ['deadlines', 'scadenze', 'calendar', 'Scadenze', db.issues.filter(isOverdue).length || null], ['reports', 'report', 'printer', 'Report e stampe']];
+  if (isAdmin()) nav.push(['data', 'dati', 'db', 'Dati e backup'], ['users', 'utenti', 'users', 'Utenti']);
   $('#nav').innerHTML = nav.map(([v, path, icon, label, cnt]) => `<button class="${r.view === v ? 'sel' : ''}" data-action="nav" data-path="${path}">${ic(icon)}<span>${label}</span>${cnt != null ? `<span class="count">${cnt}</span>` : ''}</button>`).join('');
   $('#projProg').innerHTML = `<div class="bar"><span style="width:${pp.pct}%"></span></div><span>${pp.pct}% deciso</span>`;
   $('#sideRooms').innerHTML = FLOORS.map(f => `<div class="side-floor">${esc(f.name)}</div>` + f.rooms.map(room => {
@@ -1970,8 +1969,7 @@ function viewDashboard() {
         <div class="hero-actions">
           <button class="btn btn-brass staff-only" data-action="new-issue">${ic('plus')}Nuovo argomento</button>
           <button class="btn btn-glass" data-action="nav" data-path="decisioni">${ic('compare')}Decisioni per elemento</button>
-          <button class="btn btn-glass" data-action="report" data-type="matrix">${ic('printer')}Stampa matrice</button>
-          <button class="btn btn-glass" data-action="report" data-type="complete">${ic('book')}Report completo</button>
+          <button class="btn btn-glass" data-action="report" data-type="complete">${ic('book')}Riepilogo generale PDF</button>
         </div>
       </div>
       ${progressRing(pp, 'decisioni prese')}
@@ -2061,7 +2059,6 @@ function viewRoom(id) {
         <div class="hero-actions">
           <button class="btn btn-brass staff-only" data-action="new-issue" data-room="${id}">${ic('plus')}Nuovo argomento</button>
           <button class="btn btn-glass" data-action="report" data-type="room" data-room="${id}">${ic('printer')}Scheda ambiente PDF</button>
-          <button class="btn btn-glass" data-action="report" data-type="meeting" data-room="${id}">${ic('meeting')}Report riunione</button>
         </div>
       </div>
       ${progressRing(p, 'deciso', { size: 128, stroke: 11 })}
@@ -2133,7 +2130,7 @@ function viewDecisions() {
   return `
   <div class="page-head"><div><div class="page-kicker">${ic('compare')} Confronto tra ambienti</div><h1 class="page-title">Decisioni per elemento</h1>
     <div class="page-sub">Scegli un ambito per vedere gli argomenti di tutti gli ambienti affiancati, utile per ordini, campionature e verifiche.</div></div>
-    <div class="actions"><button class="btn" data-action="dec-csv">${ic('table')}Esporta CSV</button><button class="btn btn-primary" data-action="report" data-type="elements">${ic('printer')}PDF di questa vista</button></div></div>
+    <div class="actions"><button class="btn" data-action="dec-csv">${ic('table')}Esporta CSV</button></div></div>
   <section class="card">
     <div class="elchips"><button class="elchip ${!f.element ? 'on' : ''}" data-action="dec-element" data-el=""><span class="ico">${ic('grid')}</span>Tutti</button>
       ${ELEMENTS.map(e => { const st = ROOMS.map(r => elState(r.id, e.key)); return `<button class="elchip ${f.element === e.key ? 'on' : ''}" data-action="dec-element" data-el="${e.key}"><span class="ico">${ic(e.icon)}</span>${esc(e.short)}<span style="font-size:10.5px;opacity:.75">${st.filter(s => s === 'decided').length}/${st.filter(s => s !== 'na').length}</span></button>`; }).join('')}</div>
@@ -2230,7 +2227,7 @@ function viewRegister() {
   return `
   <div class="page-head"><div><div class="page-kicker">${ic('question')} Registro di commessa</div><h1 class="page-title">Argomenti aperti</h1>
     <div class="page-sub">Domande e richieste di decisione verso progettisti, DL e fornitori. Ordine: bloccanti, scaduti, aperti o in verifica, definiti, chiusi.</div></div>
-    <div class="actions"><button class="btn" data-action="reg-csv">${ic('table')}Esporta CSV</button><button class="btn" data-action="reg-pdf">${ic('printer')}PDF elenco</button><button class="btn btn-primary staff-only" data-action="new-issue">${ic('plus')}Nuovo argomento</button></div></div>
+    <div class="actions"><button class="btn" data-action="reg-csv">${ic('table')}Esporta CSV</button><button class="btn btn-primary staff-only" data-action="new-issue">${ic('plus')}Nuovo argomento</button></div></div>
   <section class="card">
     <div class="filters">
       <div class="f" style="flex:1;min-width:200px">Cerca nel registro<input id="regQ" type="search" value="${esc(f.q)}" placeholder="Codice, titolo, lavorazione, riferimento…"></div>
@@ -2275,13 +2272,9 @@ function viewReports() {
     <div class="page-sub">PDF generati direttamente, con Report ID, intestazioni ripetute, numerazione pagine e nessuna riga spezzata tra due pagine.</div></div></div>
   <div class="callout info" style="margin-bottom:18px">${ic('shield')}<div><b>Modalità predefinita: Condivisibile.</b> Esclude note interne, potenziale extra, impatto sui tempi ed escalation. La modalità <b>Interno Ediletica</b> va scelta a ogni emissione ed è marcata «riservato» su ogni pagina. I report riportano lo stato delle informazioni alla data di emissione e non sostituiscono le conferme scritte di progettisti, DL o committente.</div></div>
   <div class="rep-grid">
-    ${card('matrix', 'matrix', 'Matrice delle decisioni', 'Una pagina: tutti gli ambienti × tutti gli elementi, con stato e specifiche sintetiche.', 1)}
-    ${card('room', 'file', 'Scheda ambiente', 'Scheda decisioni dell’ambiente: elementi con specifiche e riferimenti, criticità, planimetrie, argomenti.')}
-    ${card('elements', 'compare', 'Report per elemento', 'Lo stesso elemento in tutti gli ambienti (es. tutte le porte, tutti i ledwall).', 1)}
-    ${card('floor', 'layers', 'Riepilogo piano', 'Matrice e schede decisioni degli ambienti di un piano.')}
-    ${card('register', 'question', 'Registro argomenti', 'Tutti, non chiusi, solo bloccanti o con i filtri del registro.')}
-    ${card('meeting', 'meeting', 'Report per riunione', 'Elementi ancora da decidere e argomenti aperti, con spazi per esiti, incaricati e firme.')}
-    ${card('complete', 'book', 'Report completo', 'Quadro generale: matrice, tutti i piani e gli ambienti con immagini.')}
+    ${card('room', 'file', 'Scheda ambiente', 'Un ambiente: lo stato di ogni cassetto con i suoi argomenti, gli argomenti generali, note e immagini. Da mandare a chi lavora su quella stanza.')}
+    ${card('deadlines', 'calendar', 'Scadenze', 'Gli argomenti in ordine di data, per settimana. Filtrabile per responsabile: un PDF con solo le sue scadenze.', 1)}
+    ${card('complete', 'book', 'Riepilogo generale', 'Il quadro di tutta la commessa: matrice di avanzamento e schede di tutti gli ambienti, piano per piano.')}
   </div>
   <section class="card" style="margin-top:22px"><div class="card-head"><h3>${ic('history')}Registro emissioni</h3><span class="sub">ultimi 20 report generati da questo browser</span></div>
     ${db.reports.length ? `<div class="tablewrap"><table class="reg"><thead><tr><th>Report ID</th><th>Tipo</th><th>Ambito</th><th>Modalità</th><th>Voci</th><th>Emesso</th><th>Da</th></tr></thead><tbody>
@@ -2911,7 +2904,7 @@ const PDFC = {
 const PAGE = { W: 420, H: 297, M: 14, TOP: 35, BOTTOM: 18 };
 const ST_PDF = { 'Aperto': ['amber', 'amberBg'], 'In verifica': ['blue', 'blueBg'], 'Definito': ['violet', 'violetBg'], 'Chiuso': ['green', 'greenBg'] };
 const EST_PDF = { todo: ['slate', 'slateBg'], progress: ['amber', 'amberBg'], decided: ['green', 'greenBg'], block: ['red', 'redBg'], na: ['naTx', 'naBg'] };
-const REPORT_TYPES = { matrix: 'Matrice delle decisioni', room: 'Scheda ambiente', elements: 'Report per elemento', floor: 'Riepilogo piano', register: 'Registro argomenti', deadlines: 'Scadenze', meeting: 'Report riunione', complete: 'Report completo' };
+const REPORT_TYPES = { matrix: 'Matrice delle decisioni', room: 'Scheda ambiente', elements: 'Report per elemento', floor: 'Riepilogo piano', register: 'Registro argomenti', deadlines: 'Scadenze', meeting: 'Report riunione', complete: 'Riepilogo generale' };
 
 function pdfSafe(s) {
   return String(tr(String(s ?? ''))).replace(/[‘’‚′]/g, "'").replace(/[“”„″]/g, '"').replace(/[–—−]/g, '-')
@@ -3117,8 +3110,8 @@ function buildReport(rd) {
     B.push({ type: 'lines', label: 'Azioni successive · prossima riunione', count: 5 });
     B.push({ type: 'signatures', labels: ['Ediletica S.r.l.', 'Direzione Lavori / Coordinamento', 'Progettisti', 'Altri presenti'] });
   } else {
-    m.scope = 'Intera commessa'; m.slug = 'Completo'; m.count = ROOMS.length * ELEMENTS.length + db.issues.filter(i => rd.includeClosed || isOpen(i)).length; m.title = 'Report completo · quadro generale';
-    B.push({ type: 'heading', level: 1, kicker: 'Quadro generale di commessa', text: PROJECT.name, right: `${ROOMS.length} ambienti · ${ELEMENTS.length} elementi per ambiente` });
+    m.scope = 'Intera commessa'; m.slug = 'Riepilogo'; m.count = ROOMS.length * ELEMENTS.length + db.issues.filter(i => rd.includeClosed || isOpen(i)).length; m.title = 'Riepilogo generale';
+    B.push({ type: 'heading', level: 1, kicker: 'Quadro generale di commessa', text: PROJECT.name, right: `${ROOMS.length} ambienti · ${ELEMENTS.length} ambiti per ambiente` });
     B.push(progressStats(ROOMS)); B.push({ type: 'table', spec: matrixSpec(ROOMS) }); B.push({ type: 'legend' });
     ROOMS.forEach(r => { B.push({ type: 'pagebreak' }); B.push(...roomBlocks(r, rd, 1)); });
   }
@@ -3350,7 +3343,9 @@ function printHTML(m, lang = LANG) {
 
 /* ---------- Dialogo report ---------- */
 const RD = {};
+const REPORT_ALLOWED = ['room', 'deadlines', 'complete'];
 function openReportDialog(opts = {}) {
+  if (!REPORT_ALLOWED.includes(opts.type)) opts = { ...opts, type: opts.roomId ? 'room' : 'complete' };
   const roomId = opts.roomId || (UI.route.view === 'room' ? UI.route.id : 'PT-04');
   const withOpen = ROOMS.filter(r => db.issues.some(i => i.roomId === r.id && isOpen(i)) || ELEMENTS.some(e => ['todo', 'progress', 'block'].includes(elState(r.id, e.key)))).map(r => r.id);
   Object.assign(RD, {
@@ -3372,7 +3367,7 @@ function readRD() {
 }
 function renderReportDialog() {
   const box = RD.entry.el.querySelector('#rdBox'); const model = buildReport(RD);
-  const types = [['matrix', 'Matrice'], ['room', 'Ambiente'], ['elements', 'Per elemento'], ['floor', 'Piano'], ['register', 'Argomenti'], ['deadlines', 'Scadenze'], ['meeting', 'Riunione'], ['complete', 'Completo']];
+  const types = [['room', 'Scheda ambiente'], ['deadlines', 'Scadenze'], ['complete', 'Riepilogo generale']];
   const chk = (key, label) => `<label class="check"><input type="checkbox" data-rd="${key}" ${RD[key] ? 'checked' : ''}>${label}</label>`;
   const sel = (key, opts) => `<select data-rd-sel="${key}">${opts.map(([v, l]) => `<option value="${v}" ${RD[key] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   let o = '';
@@ -3719,6 +3714,7 @@ const EN_NOUNS = {
 };
 const T = (s) => trCore(s);
 const RULES = [
+  [/^(\d+) ambiti per ambiente$/, (m, a) => `${a} scopes per room`],
   [/^([A-Z0-9]{1,3}-\d{2}-\d{3}) aggiunto\.$/, (m, a) => `${a} added.`],
   [/^tra (\d+) giorni$/, (m, a) => `in ${a} days`],
   [/^(\d+) giorni fa$/, (m, a) => `${a} days ago`],
@@ -3909,6 +3905,13 @@ Object.assign(EN, {
   'Utile da inviare a ciascun responsabile: scegli «Chi decide» per un elenco solo con le sue scadenze.': 'Useful to send to each owner: choose “Decision owner” for a list with only their deadlines.',
   'lun': 'Mon', 'mar': 'Tue', 'mer': 'Wed', 'gio': 'Thu', 'ven': 'Fri', 'sab': 'Sat', 'dom': 'Sun',
   'Tutti gli ambienti × tutti gli ambiti su una pagina A3, con lo stato e i principali argomenti aperti in ogni casella.': 'All rooms × all scopes on one A3 page, with the status and the main open topics in each cell.'
+});
+Object.assign(EN, {
+  'Riepilogo generale': 'General summary', 'Riepilogo generale PDF': 'General summary PDF', 'Scheda ambiente': 'Room sheet',
+  'Un ambiente: lo stato di ogni cassetto con i suoi argomenti, gli argomenti generali, note e immagini. Da mandare a chi lavora su quella stanza.': 'One room: the status of every drawer with its topics, general topics, notes and images. To send to whoever works on that room.',
+  'Gli argomenti in ordine di data, per settimana. Filtrabile per responsabile: un PDF con solo le sue scadenze.': 'Topics in date order, by week. Can be filtered by owner: a PDF with only their deadlines.',
+  'Il quadro di tutta la commessa: matrice di avanzamento e schede di tutti gli ambienti, piano per piano.': 'The whole project at a glance: progress matrix and the sheets of every room, floor by floor.',
+  'ambiti per ambiente': 'scopes per room'
 });
 const EN_LC = new Map(Object.entries(EN).map(([k, v]) => [k.trim().toLowerCase(), v]));
 const _trCache = new Map();
