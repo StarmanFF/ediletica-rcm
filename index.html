@@ -1054,7 +1054,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    EDILETICA – Room Coordination Manager · v3.0
    Core: configurazione, catalogo elementi, utilità, persistenza, modello
    ===================================================================== */
-const APP_VERSION = '4.5';
+const APP_VERSION = '4.6';
 const SCHEMA = 3;
 
 const PROJECT = {
@@ -3832,6 +3832,7 @@ const MT = {
           const { data, error } = await sbClient().functions.invoke('translate', { body: { texts: b, target: this.lang } });
           let res = data;
           if (error) { try { res = await error.context.json(); } catch (e) { res = { error: error.message }; } }
+          if (res && res.error && res.error !== 'not_configured' && !this.errWarned) { this.errWarned = true; toast('Automatic translation failed: ' + res.error, 'error', { ms: 15000 }); }
           if (res && res.error === 'not_configured') { this.off = true; if (!this.warned) { this.warned = true; toast('Automatic translation of user-entered text is not active yet: the translation key still has to be configured.', 'info'); } }
           const out = (res && res.out) || [];
           b.forEach((t, k) => { const o = out[k]; if (typeof o === 'string' && o) { this.map.set(t, o); got++; } else this.failed.add(t); });
